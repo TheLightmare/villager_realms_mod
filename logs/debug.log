@@ -1,0 +1,15 @@
+[26Apr2026 16:59:09.043] [Test worker/ERROR] [com.lightmare.villagerrealms.core.persist.shard.AtomicFile/]: Quarantined corrupt shard /tmp/junit-15036191719914439287/file.bin -> /tmp/junit-15036191719914439287/file.bin.corrupt-2026-04-26T14-59-09.039779909Z: java.lang.RuntimeException: synthetic
+[26Apr2026 16:59:09.049] [Test worker/ERROR] [com.lightmare.villagerrealms.core.persist.shard.AtomicFile/]: Quarantined corrupt shard /tmp/junit-14781723372716909214/factions.bin -> /tmp/junit-14781723372716909214/factions.bin.corrupt-2026-04-26T14-59-09.048969529Z: java.io.IOException: Bad magic for FactionStore: expected 0x56524653 got 0x0
+[26Apr2026 16:59:09.065] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.FactionStore/]: FactionStore loaded: 2 factions, 2 relation rows
+[26Apr2026 16:59:09.067] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.NPCRegistry/]: NPCRegistry loaded: 0 records across 0 shards
+[26Apr2026 16:59:09.085] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.NPCRegistry/]: NPCRegistry loaded: 0 records across 0 shards
+[26Apr2026 16:59:09.096] [Test worker/ERROR] [com.lightmare.villagerrealms.core.persist.shard.AtomicFile/]: Quarantined corrupt shard /tmp/junit-2756087732669601657/npcs.r.0.0.bin -> /tmp/junit-2756087732669601657/npcs.r.0.0.bin.corrupt-2026-04-26T14-59-09.096786818Z: java.io.IOException: Bad magic for NPCShard: expected 0x56524e53 got 0x0
+[26Apr2026 16:59:09.097] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.NPCRegistry/]: NPCRegistry loaded: 1 records across 1 shards
+[26Apr2026 16:59:09.098] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.NPCRegistry/]: NPCRegistry loaded: 0 records across 0 shards
+[26Apr2026 16:59:09.109] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.NPCRegistry/]: NPCRegistry loaded: 2 records across 1 shards
+[26Apr2026 16:59:09.110] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.NPCRegistry/]: NPCRegistry loaded: 0 records across 0 shards
+[26Apr2026 16:59:09.112] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.NPCRegistry/]: NPCRegistry loaded: 0 records across 0 shards
+[26Apr2026 16:59:09.113] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.NPCRegistry/]: NPCRegistry loaded: 0 records across 0 shards
+[26Apr2026 16:59:09.121] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.NPCRegistry/]: NPCRegistry loaded: 0 records across 0 shards
+[26Apr2026 16:59:09.138] [Test worker/ERROR] [com.lightmare.villagerrealms.core.persist.shard.AtomicFile/]: Quarantined corrupt shard /tmp/junit-4596290226452046346/villages.bin -> /tmp/junit-4596290226452046346/villages.bin.corrupt-2026-04-26T14-59-09.138160106Z: java.io.IOException: Bad magic for VillageStore: expected 0x56525653 got 0x0
+[26Apr2026 16:59:09.149] [Test worker/INFO] [com.lightmare.villagerrealms.core.persist.store.VillageStore/]: VillageStore loaded: 1 villages
