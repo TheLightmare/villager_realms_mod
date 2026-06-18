@@ -236,9 +236,12 @@ public final class Reconciler {
      * applied). Called at every projection site so a freshly-loaded entity
      * is never built from a stale dormant snapshot.
      *
-     * Today tier assignment is essentially static so this is mostly a no-op
-     * — Phase 2 step 10 (dynamic tiering) makes Tier 2 → Tier 0 transitions
-     * a real event, and this hook is what keeps that transition coherent.
+     * This is the Tier 2/3 → Tier 0 catch-up half of dynamic tiering: a
+     * chunk load spawns the entity here, and {@link TierManager}'s next
+     * sweep promotes the village's tier field. A DORMANT village was being
+     * abstract-ticked each cadence, so its catch-up is usually small; a COLD
+     * village was frozen, so this collapses its missed cycles (capped at
+     * {@code AbstractTick.MAX_CYCLES_PER_CALL}).
      */
     private static NPCRecord applyCatchUp(PersistenceService svc, NPCRecord rec, long tick) {
         AIService ai = AIService.getOrNull();

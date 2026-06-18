@@ -36,4 +36,11 @@ public record NPCRecord(
         return new NPCRecord(dataVersion, identity, location, vitals, inventory,
                 economy, role, newFactionId, relationships, memory, action);
     }
+
+    /** Same NPC at a different location/tier. Returns {@code this} if unchanged. */
+    public NPCRecord withLocation(Location newLocation) {
+        if (newLocation == location) return this;
+        return new NPCRecord(dataVersion, identity, newLocation, vitals, inventory,
+                economy, role, factionId, relationships, memory, action);
+    }
 }

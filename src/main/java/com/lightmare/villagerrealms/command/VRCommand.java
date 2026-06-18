@@ -19,6 +19,7 @@ import com.lightmare.villagerrealms.core.record.Vitals;
 import com.lightmare.villagerrealms.entity.NPCEntity;
 import com.lightmare.villagerrealms.server.PersistenceService;
 import com.lightmare.villagerrealms.server.Reconciler;
+import com.lightmare.villagerrealms.server.TierManager;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -44,6 +45,7 @@ public final class VRCommand {
                         .requires(src -> src.hasPermission(2))
                         .then(Commands.literal("spawn").executes(VRCommand::spawn))
                         .then(Commands.literal("count").executes(VRCommand::count))
+                        .then(Commands.literal("tiers").executes(VRCommand::tiers))
                         .then(Commands.literal("list").executes(VRCommand::list))
                         .then(Commands.literal("flush").executes(VRCommand::flush))
                         .then(Commands.literal("respawn").executes(VRCommand::respawn))
@@ -107,6 +109,18 @@ public final class VRCommand {
                 () -> Component.literal("[vr] " + n + " NPCs across " + shards + " shards (" + dirty + " dirty)"),
                 false);
         return n;
+    }
+
+    private static int tiers(CommandContext<CommandSourceStack> ctx) {
+        int[] counts = TierManager.tierCounts();
+        ctx.getSource().sendSuccess(
+                () -> Component.literal("[vr] tiers (last sweep): active="
+                        + counts[Tier.ACTIVE.ordinal()]
+                        + " nearby=" + counts[Tier.NEARBY.ordinal()]
+                        + " dormant=" + counts[Tier.DORMANT.ordinal()]
+                        + " cold=" + counts[Tier.COLD.ordinal()]),
+                false);
+        return 1;
     }
 
     private static int list(CommandContext<CommandSourceStack> ctx) {

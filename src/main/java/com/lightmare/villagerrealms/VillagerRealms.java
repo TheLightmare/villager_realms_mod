@@ -6,6 +6,7 @@ import com.lightmare.villagerrealms.entity.client.NPCClientRegistration;
 import com.lightmare.villagerrealms.server.ActiveStepRuntime;
 import com.lightmare.villagerrealms.server.Reconciler;
 import com.lightmare.villagerrealms.server.ServerLifecycle;
+import com.lightmare.villagerrealms.server.TierManager;
 import com.mojang.logging.LogUtils;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -27,6 +28,7 @@ public final class VillagerRealms {
         NeoForge.EVENT_BUS.register(Reconciler.class);
         NeoForge.EVENT_BUS.register(VRCommand.class);
         NeoForge.EVENT_BUS.register(ActiveStepRuntime.class);
+        NeoForge.EVENT_BUS.register(TierManager.class);
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
             NPCClientRegistration.register(modBus);

@@ -13,6 +13,12 @@ public record Location(
         if (tier == null) throw new IllegalArgumentException("tier required");
     }
 
+    /** Same location at a different simulation tier. Returns {@code this} if unchanged. */
+    public Location withTier(Tier newTier) {
+        if (newTier == tier) return this;
+        return new Location(homeVillageId, x, y, z, dimension, newTier);
+    }
+
     public int chunkX() { return (int) Math.floor(x) >> 4; }
     public int chunkZ() { return (int) Math.floor(z) >> 4; }
 
