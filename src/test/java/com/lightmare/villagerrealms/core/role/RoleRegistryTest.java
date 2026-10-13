@@ -44,10 +44,40 @@ class RoleRegistryTest {
     }
 
     @Test
-    void laborerIsNotAWorker() {
+    void laborerForagesWithNoWorkstation() {
         Role lab = RoleRegistry.getOrLaborer("laborer");
-        assertFalse(lab.worker());
-        assertTrue(lab.produces().isEmpty());
+        assertTrue(lab.worker());
+        assertEquals(List.of(new RoleItemSpec(RoleRegistry.FORAGE_ITEM, 1)), lab.produces());
+        assertTrue(lab.consumes().isEmpty());
+        assertEquals("", lab.workstationKind());
+    }
+
+    @Test
+    void nonFoodVanillaProfessionsForage() {
+        for (String id : List.of("librarian", "toolsmith", "mason", "cartographer", "cleric",
+                "armorer", "fletcher", "leatherworker", "weaponsmith")) {
+            Role r = RoleRegistry.get(id).orElseThrow(() -> new AssertionError("missing role " + id));
+            assertTrue(r.worker(), id);
+            assertEquals(List.of(new RoleItemSpec(RoleRegistry.FORAGE_ITEM, 1)), r.produces(), id);
+            assertEquals("", r.workstationKind(), id + " must have no workstation kind (forages at centre)");
+        }
+    }
+
+    @Test
+    void replaceAllSwapsTheSetButKeepsALaborerFallback() {
+        RoleRegistry.replaceAll(List.of(
+                new Role("miner", true, List.of(), List.of(new RoleItemSpec("minecraft:coal", 1)), "miner")));
+        assertEquals(2, RoleRegistry.size());
+        assertTrue(RoleRegistry.get("miner").isPresent());
+        assertFalse(RoleRegistry.get("farmer").isPresent());
+        assertEquals("laborer", RoleRegistry.getOrLaborer("farmer").id());
+    }
+
+    @Test
+    void replaceAllHonoursAnExplicitLaborer() {
+        Role customLaborer = new Role("laborer", false, List.of(), List.of(), "");
+        RoleRegistry.replaceAll(List.of(customLaborer));
+        assertEquals(customLaborer, RoleRegistry.getOrLaborer("anything"));
     }
 
     @Test

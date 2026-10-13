@@ -1,0 +1,6 @@
+{
+  "worker": true,
+  "consumes": [],
+  "produces": [{"item": "minecraft:wheat", "count": 1}],
+  "workstation": "farmer"
+}

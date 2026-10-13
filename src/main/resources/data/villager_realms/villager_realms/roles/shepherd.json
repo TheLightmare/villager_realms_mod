@@ -1,0 +1,6 @@
+{
+  "worker": true,
+  "consumes": [],
+  "produces": [{"item": "minecraft:cooked_chicken", "count": 1}],
+  "workstation": "shepherd"
+}

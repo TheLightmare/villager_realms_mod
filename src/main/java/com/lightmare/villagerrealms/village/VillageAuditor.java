@@ -21,6 +21,9 @@ import com.lightmare.villagerrealms.core.record.VillageMarket;
 import com.lightmare.villagerrealms.core.record.VillageRecord;
 import com.lightmare.villagerrealms.core.record.VillageWorkstation;
 import com.lightmare.villagerrealms.core.record.Vitals;
+import com.lightmare.villagerrealms.core.role.Role;
+import com.lightmare.villagerrealms.core.role.RoleAssignment;
+import com.lightmare.villagerrealms.core.role.RoleRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
@@ -142,9 +145,10 @@ public final class VillageAuditor {
         }
         for (BlockPos bed : beds) {
             if (!taken.contains(bed)) {
-                assignments.add(new BedAssignment(bed, "laborer", null));
+                assignments.add(new BedAssignment(bed, RoleRegistry.LABORER, null));
             }
         }
+        assignments = finalizeRoles(assignments, beds, bounds);
 
         String dim = level.dimension().location().toString();
         String factionId = factionIdFor(villageId);
@@ -210,6 +214,40 @@ public final class VillageAuditor {
 
     private static int leftover(int wsCount, int bedCount) {
         return Math.max(0, wsCount - bedCount);
+    }
+
+    /**
+     * Second pass over the POI-driven assignment:
+     *   1. Derive bakers from leftover beds ({@link RoleAssignment}) — vanilla
+     *      has no baker workstation, and wheat needs a consumer.
+     *   2. Resolve each NPC's workplace. Roles with a workstation kind keep
+     *      the POI they were matched to; everything else (bakers, laborers,
+     *      the non-food professions that forage) works at the village centre
+     *      at ground level, so the active runtime can actually arrive there.
+     */
+    private static List<BedAssignment> finalizeRoles(
+            List<BedAssignment> assignments, List<BlockPos> beds, BoundingBox bounds) {
+        List<String> roleIds = new ArrayList<>(assignments.size());
+        for (BedAssignment a : assignments) roleIds.add(a.role);
+        List<String> derived = RoleAssignment.deriveBakers(roleIds);
+
+        int[] ys = new int[beds.size()];
+        for (int i = 0; i < ys.length; i++) ys[i] = beds.get(i).getY();
+        java.util.Arrays.sort(ys);
+        int groundY = ys.length == 0 ? bounds.minY() : ys[ys.length / 2];
+        BlockPos centre = new BlockPos(
+                (bounds.minX() + bounds.maxX()) / 2, groundY, (bounds.minZ() + bounds.maxZ()) / 2);
+
+        List<BedAssignment> out = new ArrayList<>(assignments.size());
+        for (int i = 0; i < assignments.size(); i++) {
+            BedAssignment a = assignments.get(i);
+            String role = derived.get(i);
+            Role def = RoleRegistry.getOrLaborer(role);
+            boolean usesStation = !def.workstationKind().isEmpty() && a.workstation != null;
+            BlockPos workplace = usesStation ? a.workstation : (def.worker() ? centre : null);
+            out.add(new BedAssignment(a.bed, role, workplace));
+        }
+        return out;
     }
 
     /**

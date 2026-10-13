@@ -3,16 +3,17 @@ package com.lightmare.villagerrealms.core.role;
 import java.util.List;
 
 /**
- * Data-driven role definition. Loaded from datapack JSON in a future step;
- * v1 ships built-in defaults via {@link RoleRegistry}.
+ * Data-driven role definition, loaded from datapack JSON (see
+ * {@link RoleJson} for the format) with {@link RoleRegistry#defaults()} as
+ * the code fallback.
  *
  * Production model is single-step: a worker, when "working", consumes
  * {@code consumes} and produces {@code produces} (either may be empty).
  * Multi-step chains (wheat -&gt; flour -&gt; bread) are explicitly v2.
  *
- * {@code workstationKind} mirrors the auditor-side role string and is kept
- * here so addon roles can self-describe; v1 still uses RoleMapping for the
- * audit-time POI scan.
+ * {@code workstationKind} names the vanilla POI the auditor matches this
+ * role to (via RoleMapping). Empty means "no workstation": the auditor
+ * sends such workers to the village centre, where they forage.
  */
 public record Role(
         String id,

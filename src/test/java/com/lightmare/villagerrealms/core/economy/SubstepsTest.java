@@ -8,6 +8,8 @@ import com.lightmare.villagerrealms.core.record.Provenance;
 import com.lightmare.villagerrealms.core.record.RoleState;
 import com.lightmare.villagerrealms.core.record.VillageMarket;
 import com.lightmare.villagerrealms.core.record.Vitals;
+import com.lightmare.villagerrealms.core.role.Role;
+import com.lightmare.villagerrealms.core.role.RoleRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -112,7 +114,7 @@ class SubstepsTest {
     }
 
     @Test
-    void laborerWorkIsNoOp() {
+    void laborerForagesIntoMarketAndIsPaid() {
         var markets = new MapMarkets();
         markets.put("v1", VillageMarket.EMPTY);
 
@@ -121,8 +123,27 @@ class SubstepsTest {
         npc = withEconomy(npc, new EconomicState(0L, List.of(), List.of()));
 
         NPCRecord after = Substeps.work(npc, markets, 500L);
-        assertEquals(0L, after.economy().gold());
-        assertEquals(0, markets.get("v1").orElseThrow().stockpile().size());
+        assertEquals(1, markets.get("v1").orElseThrow().stockOf(RoleRegistry.FORAGE_ITEM));
+        assertTrue(after.economy().gold() > 0L, "foraging must earn gold");
+    }
+
+    @Test
+    void nonWorkerRoleWorkIsNoOp() {
+        RoleRegistry.register(new Role("elder_test", false, List.of(), List.of(), ""));
+        try {
+            var markets = new MapMarkets();
+            markets.put("v1", VillageMarket.EMPTY);
+
+            NPCRecord npc = Fixtures.npc(UUID.randomUUID(), "v1", 0, 0);
+            npc = withRole(npc, "elder_test");
+            npc = withEconomy(npc, new EconomicState(0L, List.of(), List.of()));
+
+            NPCRecord after = Substeps.work(npc, markets, 500L);
+            assertSame(npc, after);
+            assertEquals(0, markets.get("v1").orElseThrow().stockpile().size());
+        } finally {
+            RoleRegistry.resetToDefaults();
+        }
     }
 
     @Test

@@ -12,6 +12,8 @@ import com.lightmare.villagerrealms.core.record.RoleState;
 import com.lightmare.villagerrealms.core.record.Tier;
 import com.lightmare.villagerrealms.core.record.VillageMarket;
 import com.lightmare.villagerrealms.core.record.Vitals;
+import com.lightmare.villagerrealms.core.role.Role;
+import com.lightmare.villagerrealms.core.role.RoleRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -184,7 +186,30 @@ class AbstractTickTest {
     }
 
     @Test
-    void laborerDoesNotProduce() {
+    void nonWorkerRoleDoesNotProduce() {
+        RoleRegistry.register(new Role("elder_test", false, List.of(), List.of(), ""));
+        try {
+            NPCRecord rec = asDormant(Fixtures.npc(UUID.randomUUID(), "v", 0, 0));
+            rec = new NPCRecord(
+                    rec.dataVersion(), rec.identity(), rec.location(),
+                    rec.vitals(), rec.inventory(), rec.economy(),
+                    new RoleState("elder_test", null, 0L),
+                    rec.factionId(), rec.relationships(), rec.memory(), rec.action());
+
+            MapMarkets markets = new MapMarkets();
+            markets.put("v", VillageMarket.EMPTY);
+
+            NPCRecord after = AbstractTick.applyCycle(rec, workTimeAt(), markets);
+
+            VillageMarket m = markets.get("v").orElseThrow();
+            assertTrue(m.stockpile().isEmpty(), "non-worker shouldn't produce anything");
+        } finally {
+            RoleRegistry.resetToDefaults();
+        }
+    }
+
+    @Test
+    void laborerForagesDuringWorkTime() {
         NPCRecord rec = asDormant(Fixtures.npc(UUID.randomUUID(), "v", 0, 0));
         rec = new NPCRecord(
                 rec.dataVersion(), rec.identity(), rec.location(),
@@ -195,11 +220,10 @@ class AbstractTickTest {
         MapMarkets markets = new MapMarkets();
         markets.put("v", VillageMarket.EMPTY);
 
-        NPCRecord after = AbstractTick.applyCycle(rec, workTimeAt(), markets);
+        AbstractTick.applyCycle(rec, workTimeAt(), markets);
 
-        // Laborer is not a worker; market should stay empty.
-        VillageMarket m = markets.get("v").orElseThrow();
-        assertTrue(m.stockpile().isEmpty(), "non-worker shouldn't produce anything");
+        assertEquals(1, markets.get("v").orElseThrow().stockOf(RoleRegistry.FORAGE_ITEM),
+                "laborers forage into the market while dormant too");
     }
 
     @Test

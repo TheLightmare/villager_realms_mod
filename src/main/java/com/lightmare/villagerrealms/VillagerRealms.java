@@ -1,6 +1,7 @@
 package com.lightmare.villagerrealms;
 
 import com.lightmare.villagerrealms.command.VRCommand;
+import com.lightmare.villagerrealms.data.RoleLoader;
 import com.lightmare.villagerrealms.entity.NPCEntityType;
 import com.lightmare.villagerrealms.entity.client.NPCClientRegistration;
 import com.lightmare.villagerrealms.server.ActiveStepRuntime;
@@ -29,6 +30,7 @@ public final class VillagerRealms {
         NeoForge.EVENT_BUS.register(VRCommand.class);
         NeoForge.EVENT_BUS.register(ActiveStepRuntime.class);
         NeoForge.EVENT_BUS.register(TierManager.class);
+        NeoForge.EVENT_BUS.register(RoleLoader.class);
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
             NPCClientRegistration.register(modBus);

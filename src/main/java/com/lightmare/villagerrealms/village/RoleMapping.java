@@ -12,8 +12,9 @@ import java.util.Map;
 
 /**
  * Workstation -> role id. Vanilla profession mapping for v1. Roles are plain
- * strings; the actual role data (schedule, needed items) will be a datapack-
- * driven JSON in a later step.
+ * strings that key into {@code RoleRegistry} (datapack-driven); the mapping
+ * only decides which POI a bed gets matched to. Roles with no POI (baker,
+ * laborer) are assigned by the auditor's second pass, not here.
  *
  * Two indices are kept in sync:
  *   - {@link #BY_BLOCK} for code that has a {@link Block} in hand.

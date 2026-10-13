@@ -1,0 +1,6 @@
+{
+  "worker": true,
+  "consumes": [],
+  "produces": [{"item": "minecraft:carrot", "count": 1}],
+  "workstation": ""
+}
