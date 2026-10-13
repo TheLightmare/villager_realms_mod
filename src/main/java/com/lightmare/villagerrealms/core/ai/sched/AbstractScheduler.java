@@ -121,6 +121,19 @@ public final class AbstractScheduler {
         return advanced;
     }
 
+    /**
+     * Stamp an NPC as simulated-up-to {@code currentTick} without running any
+     * cycles. Call when an NPC leaves live simulation (ACTIVE/NEARBY →
+     * DORMANT/COLD). While the entity was driven by {@code ActiveStepRuntime}
+     * the scheduler skipped it, so {@code lastAbstractTick} still points at the
+     * moment it was last dormant; without this stamp the next abstract pass
+     * would replay the entire live period on top of what already happened.
+     */
+    public void markCurrent(UUID uuid, long currentTick) {
+        if (uuid == null) return;
+        lastAbstractTick.put(uuid, currentTick);
+    }
+
     /** Drop any cached state for an NPC — e.g. on remove() or full reset. */
     public void forget(UUID uuid) {
         lastAbstractTick.remove(uuid);

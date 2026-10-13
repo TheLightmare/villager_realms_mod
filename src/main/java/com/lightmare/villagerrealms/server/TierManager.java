@@ -1,5 +1,6 @@
 package com.lightmare.villagerrealms.server;
 
+import com.lightmare.villagerrealms.core.ai.sched.AbstractScheduler;
 import com.lightmare.villagerrealms.core.ai.sched.TierPolicy;
 import com.lightmare.villagerrealms.core.persist.store.NPCRegistry;
 import com.lightmare.villagerrealms.core.record.Location;
@@ -92,6 +93,8 @@ public final class TierManager {
         Map<String, ServerLevel> levels = levelsByDimension(server);
         long now = server.overworld().getGameTime();
         NPCRegistry registry = svc.registry();
+        AIService ai = AIService.getOrNull();
+        AbstractScheduler abstractSched = ai == null ? null : ai.abstractScheduler();
 
         for (int i = 0; i < lastTierCounts.length; i++) lastTierCounts[i] = 0;
 
@@ -114,7 +117,7 @@ public final class TierManager {
             Tier target = TierPolicy.resolve(
                     loaded, nearestSq, ACTIVE_RADIUS, dormantTicks, COLD_AFTER_TICKS);
 
-            applyTier(registry, v.villageId(), target);
+            applyTier(registry, abstractSched, v.villageId(), target, now);
         }
 
         if (LOG.isDebugEnabled()) {
@@ -131,12 +134,24 @@ public final class TierManager {
      * Pin every NPC of {@code villageId} to {@code target}, writing back only
      * those whose tier actually changed. {@code byVillage} returns a fresh
      * list, so put() during iteration is safe.
+     *
+     * On a live → offline transition (ACTIVE/NEARBY → DORMANT/COLD) the
+     * abstract scheduler is stamped with {@code now}: the live runtime has
+     * already applied everything up to this tick, so abstract simulation
+     * must resume from here rather than from the NPC's last dormant tick.
      */
-    private static void applyTier(NPCRegistry registry, String villageId, Tier target) {
+    private static void applyTier(NPCRegistry registry, AbstractScheduler abstractSched,
+                                  String villageId, Tier target, long now) {
+        boolean targetOffline = target == Tier.DORMANT || target == Tier.COLD;
         for (NPCRecord rec : registry.byVillage(villageId)) {
             Location loc = rec.location();
             lastTierCounts[target.ordinal()]++;
-            if (loc.tier() == target) continue;
+            Tier prior = loc.tier();
+            if (prior == target) continue;
+            boolean priorLive = prior == Tier.ACTIVE || prior == Tier.NEARBY;
+            if (priorLive && targetOffline && abstractSched != null) {
+                abstractSched.markCurrent(rec.identity().uuid(), now);
+            }
             registry.put(rec.withLocation(loc.withTier(target)));
         }
     }

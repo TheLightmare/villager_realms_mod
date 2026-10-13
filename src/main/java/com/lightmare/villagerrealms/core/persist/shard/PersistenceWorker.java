@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Single background thread that drains a queue of (path, bytes) snapshots and
@@ -25,6 +26,12 @@ public final class PersistenceWorker {
     private final LinkedBlockingQueue<Job> queue = new LinkedBlockingQueue<>();
     private final java.util.concurrent.ConcurrentHashMap<Path, byte[]> latest =
             new java.util.concurrent.ConcurrentHashMap<>();
+    /**
+     * Jobs submitted but not yet fully handled (written, failed, or skipped as
+     * superseded). The queue alone can't answer "is anything in flight?" —
+     * the worker polls a job off the queue before writing it.
+     */
+    private final AtomicInteger pending = new AtomicInteger();
     private final Thread thread;
     private volatile boolean running = true;
 
@@ -39,6 +46,7 @@ public final class PersistenceWorker {
 
     public void submit(Path target, byte[] bytes) {
         latest.put(target, bytes);
+        pending.incrementAndGet();
         queue.offer(new Job(target, bytes));
     }
 
@@ -63,25 +71,30 @@ public final class PersistenceWorker {
             }
             if (job == null) continue;
 
-            byte[] current = latest.get(job.target);
-            if (current != job.bytes) continue;
-
             try {
-                AtomicFile.write(job.target, job.bytes);
-                latest.remove(job.target, job.bytes);
-            } catch (IOException e) {
-                LOG.error("Failed to write shard {}: {}", job.target, e.toString(), e);
+                byte[] current = latest.get(job.target);
+                if (current != job.bytes) continue;
+
+                try {
+                    AtomicFile.write(job.target, job.bytes);
+                    latest.remove(job.target, job.bytes);
+                } catch (IOException e) {
+                    LOG.error("Failed to write shard {}: {}", job.target, e.toString(), e);
+                }
+            } finally {
+                pending.decrementAndGet();
             }
         }
     }
 
+    /** True when every submitted job has been written, failed, or superseded. */
     public boolean isIdle() {
-        return queue.isEmpty();
+        return pending.get() == 0;
     }
 
     public void awaitIdle(long timeoutMillis) throws InterruptedException {
         long deadline = System.currentTimeMillis() + timeoutMillis;
-        while (!queue.isEmpty() && System.currentTimeMillis() < deadline) {
+        while (!isIdle() && System.currentTimeMillis() < deadline) {
             Thread.sleep(10);
         }
     }
