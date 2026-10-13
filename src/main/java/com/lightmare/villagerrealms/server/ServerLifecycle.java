@@ -1,6 +1,10 @@
 package com.lightmare.villagerrealms.server;
 
+import com.lightmare.villagerrealms.core.economy.MarketOps;
+import com.lightmare.villagerrealms.core.persist.store.VillageStore;
 import com.lightmare.villagerrealms.core.record.NPCRecord;
+import com.lightmare.villagerrealms.core.record.VillageMarket;
+import com.lightmare.villagerrealms.core.record.VillageRecord;
 import com.lightmare.villagerrealms.entity.NPCEntity;
 import com.lightmare.villagerrealms.entity.Projector;
 import net.minecraft.server.level.ServerLevel;
@@ -13,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 public final class ServerLifecycle {
 
@@ -20,6 +25,8 @@ public final class ServerLifecycle {
 
     private static final int LIVE_SYNC_INTERVAL_TICKS = 60;
     private static final int AUTOSAVE_INTERVAL_TICKS = 6000;
+    /** Supply/demand retained per autosave interval: ~0.9^6 ≈ 53% after half an hour. */
+    private static final float MARKET_DECAY_KEEP = 0.9f;
 
     private static int tickCounter;
     private static long worldTick;
@@ -82,6 +89,7 @@ public final class ServerLifecycle {
             extractAllLoaded(event.getServer());
         }
         if (tickCounter % AUTOSAVE_INTERVAL_TICKS == 0) {
+            decayMarkets(svc.villages());
             try {
                 svc.registry().flushDirty();
                 svc.villages().flushDirty();
@@ -89,6 +97,21 @@ public final class ServerLifecycle {
             } catch (IOException e) {
                 LOG.error("Auto-save flush failed: {}", e.toString(), e);
             }
+        }
+    }
+
+    /**
+     * Let each market's supply/demand counters forget the past so price
+     * tracks recent flow rather than lifetime totals. Runs on the autosave
+     * cadence for every village regardless of tier — Tier 2 villages trade
+     * too. Only villages with a live signal are written back.
+     */
+    private static void decayMarkets(VillageStore villages) {
+        for (VillageRecord v : new ArrayList<>(villages.all())) {
+            VillageMarket m = v.market();
+            if (m.supply().isEmpty() && m.demand().isEmpty()) continue;
+            VillageMarket next = MarketOps.decay(m, MARKET_DECAY_KEEP);
+            if (!next.equals(m)) villages.put(v.withMarket(next));
         }
     }
 

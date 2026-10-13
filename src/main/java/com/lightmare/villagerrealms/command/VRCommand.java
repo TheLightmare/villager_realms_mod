@@ -1,5 +1,10 @@
 package com.lightmare.villagerrealms.command;
 
+import com.lightmare.villagerrealms.core.ai.Action;
+import com.lightmare.villagerrealms.core.ai.ActionStep;
+import com.lightmare.villagerrealms.core.ai.EvalContext;
+import com.lightmare.villagerrealms.core.ai.Evaluators;
+import com.lightmare.villagerrealms.core.economy.MarketPricing;
 import com.lightmare.villagerrealms.core.record.ActionState;
 import com.lightmare.villagerrealms.core.record.EconomicState;
 import com.lightmare.villagerrealms.core.record.Faction;
@@ -15,11 +20,15 @@ import com.lightmare.villagerrealms.core.record.Relationships;
 import com.lightmare.villagerrealms.core.record.RoleState;
 import com.lightmare.villagerrealms.core.record.Tier;
 import com.lightmare.villagerrealms.core.record.Traits;
+import com.lightmare.villagerrealms.core.record.VillageMarket;
+import com.lightmare.villagerrealms.core.record.VillageRecord;
 import com.lightmare.villagerrealms.core.record.Vitals;
 import com.lightmare.villagerrealms.entity.NPCEntity;
+import com.lightmare.villagerrealms.server.AIService;
 import com.lightmare.villagerrealms.server.PersistenceService;
 import com.lightmare.villagerrealms.server.Reconciler;
 import com.lightmare.villagerrealms.server.TierManager;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -32,6 +41,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 
 public final class VRCommand {
@@ -56,7 +66,88 @@ public final class VRCommand {
                                 .then(Commands.argument("uuid", UuidArgument.uuid())
                                         .executes(VRCommand::info)))
                         .then(Commands.literal("faction")
-                                .then(Commands.literal("list").executes(VRCommand::factionList))));
+                                .then(Commands.literal("list").executes(VRCommand::factionList)))
+                        .then(Commands.literal("village")
+                                .then(Commands.literal("list").executes(VRCommand::villageList)))
+                        .then(Commands.literal("market")
+                                .then(Commands.argument("village", StringArgumentType.string())
+                                        .executes(VRCommand::market))));
+    }
+
+    private static int villageList(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack src = ctx.getSource();
+        PersistenceService svc = PersistenceService.getOrNull();
+        if (svc == null) {
+            src.sendFailure(Component.literal("[vr] PersistenceService not started"));
+            return 0;
+        }
+        int n = 0;
+        for (VillageRecord v : svc.villages().all()) {
+            n++;
+            int npcs = svc.registry().byVillage(v.villageId()).size();
+            line(src, String.format("[vr] %s dim=%s centre=%d,%d,%d beds=%d workstations=%d npcs=%d audited=%s faction=%s",
+                    v.villageId(), v.dimension(),
+                    v.centerX(), v.groundY(), v.centerZ(),
+                    v.beds().size(), v.workstations().size(), npcs, v.audited(),
+                    v.factionOwnerId() == null ? "<none>" : v.factionOwnerId()));
+        }
+        if (n == 0) line(src, "[vr] no villages known");
+        return n;
+    }
+
+    private static int market(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack src = ctx.getSource();
+        String villageId = StringArgumentType.getString(ctx, "village");
+        PersistenceService svc = PersistenceService.getOrNull();
+        if (svc == null) {
+            src.sendFailure(Component.literal("[vr] PersistenceService not started"));
+            return 0;
+        }
+        VillageRecord v = svc.villages().get(villageId).orElse(null);
+        if (v == null) {
+            src.sendFailure(Component.literal("[vr] No village '" + villageId + "' (see /vr village list)"));
+            return 0;
+        }
+        VillageMarket m = v.market();
+        line(src, "[vr] market " + villageId + " ledger=" + m.goldLedger() + " gold");
+
+        java.util.TreeSet<String> items = new java.util.TreeSet<>(m.stockpile().keySet());
+        items.addAll(m.supply().keySet());
+        items.addAll(m.demand().keySet());
+        if (items.isEmpty()) {
+            line(src, "  <no activity>");
+            return 1;
+        }
+        line(src, String.format("  %-26s %5s %6s %6s %5s %4s", "item", "stock", "supply", "demand", "price", "base"));
+        for (String item : items) {
+            line(src, String.format("  %-26s %5d %6d %6d %5d %4d",
+                    item, m.stockOf(item), m.supplyOf(item), m.demandOf(item),
+                    MarketPricing.currentPrice(m, item), MarketPricing.basePrice(item)));
+        }
+        return items.size();
+    }
+
+    /**
+     * Resolve the concrete substep the active runtime would execute next for
+     * this record, for display. Mirrors {@code ActiveStepRuntime.drive}'s
+     * plan + index lookup; null if the action id is unknown or has no plan.
+     */
+    private static String describeStep(CommandSourceStack src, NPCRecord rec) {
+        AIService ai = AIService.getOrNull();
+        ActionState act = rec.action();
+        if (ai == null || act == null) return null;
+        Action action = null;
+        for (Action a : Evaluators.defaultActions()) {
+            if (a.id().equals(act.actionId())) { action = a; break; }
+        }
+        if (action == null) return null;
+        ServerLevel overworld = src.getServer().overworld();
+        EvalContext ctx = new EvalContext(rec, overworld.getGameTime(), overworld.getDayTime(), ai.viewFor(rec));
+        List<ActionStep> steps = action.plan(ctx);
+        if (steps.isEmpty()) return "<empty plan>";
+        ActionStep step = steps.get(Math.min(act.subStep(), steps.size() - 1));
+        String target = step.target() == null || step.target().isEmpty() ? "" : " " + step.target();
+        return step.kind() + target + " (" + (Math.min(act.subStep(), steps.size() - 1) + 1) + "/" + steps.size() + ")";
     }
 
     private static int spawn(CommandContext<CommandSourceStack> ctx) {
@@ -253,7 +344,9 @@ public final class VRCommand {
         line(src, "  economy: gold=" + econ.gold()
                 + " debts=" + econ.debts().size()
                 + " property=" + econ.ownedProperty().size());
+        String step = describeStep(src, rec);
         line(src, "  action: " + act.actionId() + " step=" + act.subStep()
+                + (step == null ? "" : " [" + step + "]")
                 + " startedAt=" + act.startedAtTick()
                 + (act.checkpointToken().isEmpty() ? "" : " ckpt=" + act.checkpointToken()));
 
