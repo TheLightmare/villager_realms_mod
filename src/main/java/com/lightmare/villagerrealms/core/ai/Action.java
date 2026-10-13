@@ -33,10 +33,11 @@ public interface Action {
     boolean essential();
 
     /**
-     * Plan the concrete sub-step sequence at the moment the action is
-     * picked. v1 returns marker steps only — actual world effects come
-     * online in step 5 (economy). Returning an empty list is allowed and
-     * means the action is a no-op for now.
+     * Plan the concrete sub-step sequence for this action. The active
+     * runtime re-plans every drive and executes the step at the record's
+     * current sub-step index, so plans must be deterministic for a given
+     * context. Returning an empty list is allowed and means "nothing to do
+     * right now" (e.g. buy_food with no food in the market).
      */
     List<ActionStep> plan(EvalContext ctx);
 }

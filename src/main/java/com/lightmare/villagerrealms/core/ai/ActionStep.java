@@ -1,10 +1,12 @@
 package com.lightmare.villagerrealms.core.ai;
 
 /**
- * One sub-step in an action sequence. The step kind is opaque to the AI
- * layer — actual execution lives in a future runtime that knows how to
- * pathfind, interact with workstations, etc. v1 only stores the kind so
- * that the picked action can be inspected and tested.
+ * One sub-step in an action sequence. The kind is opaque to the AI layer;
+ * {@code ActiveStepRuntime} (Tier 0/1) dispatches on it — {@code pathfind},
+ * {@code consume}, {@code work}, {@code buy}, {@code withdraw}, {@code sleep},
+ * {@code idle} — and applies effects through {@code Substeps} only when the
+ * entity is physically in place. {@code target} is kind-specific: a
+ * {@code "x,y,z"} coordinate, {@code "bed"}, {@code "market"}, or an item id.
  */
 public record ActionStep(String kind, String target) {
     public ActionStep {

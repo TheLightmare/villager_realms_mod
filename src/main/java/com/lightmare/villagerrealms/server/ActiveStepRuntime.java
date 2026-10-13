@@ -57,10 +57,19 @@ public final class ActiveStepRuntime {
     private static final double MOVE_SPEED = 0.6;
     private static final double ARRIVE_RADIUS_SQ = 2.5 * 2.5;
 
+    /**
+     * Give up on a pathfind after this long without arriving and move on to
+     * the next substep. Bounds how long the mid-pathfind lock in
+     * {@code StepExecutor} can hold an NPC on an unreachable target.
+     */
+    public static final int PATHFIND_TIMEOUT_TICKS = 600;
+
     /** Last tick each NPC fired a productive substep effect, keyed by UUID. */
     private static final Map<UUID, Long> lastFiredAt = new HashMap<>();
     /** Tracks the action key (id+startedAt) so cadence resets on action change. */
     private static final Map<UUID, String> currentActionKey = new HashMap<>();
+    /** Tick at which each NPC's current pathfind substep began walking. */
+    private static final Map<UUID, Long> pathfindSince = new HashMap<>();
 
     private static int counter;
 
@@ -88,6 +97,7 @@ public final class ActiveStepRuntime {
     public static void reset() {
         lastFiredAt.clear();
         currentActionKey.clear();
+        pathfindSince.clear();
     }
 
     private static void drive(ServerLevel level, NPCEntity entity,
@@ -115,6 +125,7 @@ public final class ActiveStepRuntime {
         if (!key.equals(prior)) {
             currentActionKey.put(id, key);
             lastFiredAt.remove(id);
+            pathfindSince.remove(id);
         }
 
         Action chosen = findAction(act.actionId());
@@ -140,7 +151,7 @@ public final class ActiveStepRuntime {
         }
 
         switch (step.kind()) {
-            case "pathfind": handlePathfind(level, entity, rec, act, step, svc, idx, steps.size()); return;
+            case "pathfind": handlePathfind(level, entity, rec, act, step, svc, idx, steps.size(), tick); return;
             case "consume":  handleConsume(entity, rec, step, svc, ai, tick); return;
             case "work":     handleWork(entity, rec, svc, ai, tick); return;
             case "buy":      handleBuy(entity, rec, step, svc, ai, tick); return;
@@ -154,28 +165,63 @@ public final class ActiveStepRuntime {
 
     // -------- pathfind ---------------------------------------------------
 
+    /**
+     * Walk toward the step's target. While walking, the record carries
+     * {@link ActionState#CKPT_PATHFINDING} so the scheduler can't swap the
+     * action mid-route (CLAUDE.md action atomicity). The token is cleared —
+     * and the substep advanced — on arrival, on an unresolvable target, or
+     * after {@link #PATHFIND_TIMEOUT_TICKS} without arriving.
+     */
     private static void handlePathfind(ServerLevel level, NPCEntity entity,
                                        NPCRecord rec, ActionState act, ActionStep step,
-                                       PersistenceService svc, int idx, int stepCount) {
+                                       PersistenceService svc, int idx, int stepCount, long tick) {
+        UUID id = entity.getUUID();
         BlockPos target = resolveTarget(level, rec, step.target(), svc);
         if (target == null) {
             // No resolvable target — skip the pathfind and let the next step run.
-            advanceSubstep(rec, act, idx + 1, svc);
-            entity.getNavigation().stop();
+            finishPathfind(entity, rec, act, idx, stepCount, svc);
             return;
         }
         double distSq = entity.distanceToSqr(
                 target.getX() + 0.5, target.getY(), target.getZ() + 0.5);
         if (distSq < ARRIVE_RADIUS_SQ) {
-            entity.getNavigation().stop();
-            if (idx < stepCount - 1) advanceSubstep(rec, act, idx + 1, svc);
+            finishPathfind(entity, rec, act, idx, stepCount, svc);
             return;
         }
+
+        Long since = pathfindSince.get(id);
+        if (since == null) {
+            since = tick;
+            pathfindSince.put(id, tick);
+        }
+        if (tick - since > PATHFIND_TIMEOUT_TICKS) {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("[vr] pathfind to {} timed out for {} ({} ticks); skipping step",
+                        target, id, tick - since);
+            }
+            finishPathfind(entity, rec, act, idx, stepCount, svc);
+            return;
+        }
+        if (!act.isPathfinding()) {
+            svc.registry().put(withAction(rec, act.withCheckpoint(ActionState.CKPT_PATHFINDING)));
+        }
+
         if (entity.getNavigation().isInProgress()) return;
         boolean ok = entity.getNavigation().moveTo(
                 target.getX() + 0.5, target.getY(), target.getZ() + 0.5, MOVE_SPEED);
         if (!ok && LOG.isDebugEnabled()) {
-            LOG.debug("[vr] moveTo({}) refused for {}", target, entity.getUUID());
+            LOG.debug("[vr] moveTo({}) refused for {}", target, id);
+        }
+    }
+
+    /** Stop walking, clear the pathfind checkpoint, and move to the next substep if there is one. */
+    private static void finishPathfind(NPCEntity entity, NPCRecord rec, ActionState act,
+                                       int idx, int stepCount, PersistenceService svc) {
+        pathfindSince.remove(entity.getUUID());
+        entity.getNavigation().stop();
+        int next = idx < stepCount - 1 ? idx + 1 : idx;
+        if (next != act.subStep() || act.isPathfinding()) {
+            svc.registry().put(withAction(rec, act.withSubStep(next, "")));
         }
     }
 
@@ -317,14 +363,11 @@ public final class ActiveStepRuntime {
         return last == null || tick - last >= cadence;
     }
 
-    private static void advanceSubstep(NPCRecord rec, ActionState act, int newSub, PersistenceService svc) {
-        ActionState next = new ActionState(
-                act.actionId(), newSub, act.startedAtTick(), act.checkpointToken());
-        NPCRecord updated = new NPCRecord(
+    private static NPCRecord withAction(NPCRecord rec, ActionState next) {
+        return new NPCRecord(
                 rec.dataVersion(), rec.identity(), rec.location(),
                 rec.vitals(), rec.inventory(), rec.economy(), rec.role(),
                 rec.factionId(), rec.relationships(), rec.memory(), next);
-        svc.registry().put(updated);
     }
 
     private static Action findAction(String id) {
@@ -377,11 +420,9 @@ public final class ActiveStepRuntime {
         return null;
     }
 
+    /** The "market" target: bbox centre in XZ at bed-floor height (see {@link VillageRecord#groundY}). */
     private static BlockPos centerOf(VillageRecord village) {
         if (village == null) return null;
-        int cx = (village.minX() + village.maxX()) / 2;
-        int cy = (village.minY() + village.maxY()) / 2;
-        int cz = (village.minZ() + village.maxZ()) / 2;
-        return new BlockPos(cx, cy, cz);
+        return new BlockPos(village.centerX(), village.groundY(), village.centerZ());
     }
 }

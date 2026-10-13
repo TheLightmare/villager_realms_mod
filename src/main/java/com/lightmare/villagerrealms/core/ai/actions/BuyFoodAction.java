@@ -15,8 +15,8 @@ import java.util.List;
  * "Walk to the market and buy a unit of the cheapest food." Gated on
  * hunger + market having food + the NPC's ability to pay.
  *
- * Plans pathfind -&gt; buy. The buy substep is the one with side effects;
- * pathfind is a marker until v2 wires real movement.
+ * Plans pathfind (to the village centre) -&gt; buy. The buy substep only
+ * fires once the entity is at the centre.
  *
  * Lower base weight than EatAction so a hungry NPC with food on hand eats
  * before going shopping.
