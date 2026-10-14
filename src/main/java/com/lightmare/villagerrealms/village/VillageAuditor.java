@@ -4,6 +4,7 @@ import com.lightmare.villagerrealms.core.persist.store.FactionStore;
 import com.lightmare.villagerrealms.core.persist.store.NPCRegistry;
 import com.lightmare.villagerrealms.core.persist.store.VillageStore;
 import com.lightmare.villagerrealms.core.record.ActionState;
+import com.lightmare.villagerrealms.core.record.DeathRecord;
 import com.lightmare.villagerrealms.core.record.EconomicState;
 import com.lightmare.villagerrealms.core.record.Faction;
 import com.lightmare.villagerrealms.core.record.Gender;
@@ -69,7 +70,8 @@ public final class VillageAuditor {
                 java.util.List.of(),
                 java.util.List.of(),
                 VillageMarket.EMPTY,
-                null);
+                null,
+                java.util.List.of());
     }
 
     /** Faction id stamped on a village's NPCs. v1: one faction per village. */
@@ -87,6 +89,7 @@ public final class VillageAuditor {
 
         long t0 = System.nanoTime();
         PoiManager poi = level.getPoiManager();
+        VillageRecord prior = villages.get(villageId).orElse(null);
 
         List<BlockPos> beds = new ArrayList<>();
         List<WorkstationHit> workstations = new ArrayList<>();
@@ -156,6 +159,11 @@ public final class VillageAuditor {
 
         for (BedAssignment a : assignments) {
             UUID uuid = bedUuid(villageId, a.bed);
+            if (prior != null && prior.isDead(uuid)) {
+                // The NPC born to this bed has died; the bed stays free.
+                bedRecords.add(new VillageBed(a.bed.getX(), a.bed.getY(), a.bed.getZ(), a.role, null));
+                continue;
+            }
             bedRecords.add(new VillageBed(
                     a.bed.getX(), a.bed.getY(), a.bed.getZ(), a.role, uuid));
 
@@ -189,8 +197,8 @@ public final class VillageAuditor {
                     w.pos.getX(), w.pos.getY(), w.pos.getZ(), w.role));
         }
 
-        VillageRecord prior = villages.get(villageId).orElse(null);
         VillageMarket market = prior != null ? prior.market() : VillageMarket.EMPTY;
+        List<DeathRecord> deaths = prior != null ? prior.deaths() : List.of();
         VillageRecord village = new VillageRecord(
                 VillageRecord.CURRENT_VERSION,
                 villageId,
@@ -201,7 +209,8 @@ public final class VillageAuditor {
                 bedRecords,
                 wsRecords,
                 market,
-                factionId);
+                factionId,
+                deaths);
         villages.put(village);
 
         LOG.info("[vr] Audited village {}: {} beds ({} assigned), {} workstations, took {} ms",

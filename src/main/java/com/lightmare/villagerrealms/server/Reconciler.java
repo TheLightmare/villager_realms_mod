@@ -1,6 +1,7 @@
 package com.lightmare.villagerrealms.server;
 
 import com.lightmare.villagerrealms.core.persist.store.NPCRegistry;
+import com.lightmare.villagerrealms.core.economy.Substeps;
 import com.lightmare.villagerrealms.core.record.NPCRecord;
 import com.lightmare.villagerrealms.entity.NPCEntity;
 import com.lightmare.villagerrealms.entity.NPCEntityType;
@@ -72,6 +73,11 @@ public final class Reconciler {
             return;
         }
         rec = applyCatchUp(svc, rec, event.getLevel().getGameTime());
+        if (rec == null) {
+            // Starved during catch-up; buried. The chunk's stale entity must not walk.
+            event.setCanceled(true);
+            return;
+        }
         Projector.project(rec, npc);
     }
 
@@ -224,6 +230,7 @@ public final class Reconciler {
         PersistenceService svc = PersistenceService.getOrNull();
         if (svc != null) {
             rec = applyCatchUp(svc, rec, level.getGameTime());
+            if (rec == null) return null; // starved during catch-up; buried
         }
         Projector.project(rec, npc);
         if (!level.addFreshEntity(npc)) return null;
@@ -248,6 +255,10 @@ public final class Reconciler {
         if (ai == null) return rec;
         NPCRecord updated = ai.catchUp(rec, tick);
         if (updated != null && updated != rec) {
+            if (Substeps.isDead(updated)) {
+                ConsequenceEvents.onAbstractStarvation(svc, updated, tick);
+                return null;
+            }
             svc.registry().put(updated);
             return updated;
         }

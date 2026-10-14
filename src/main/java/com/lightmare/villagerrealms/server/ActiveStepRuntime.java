@@ -70,6 +70,18 @@ public final class ActiveStepRuntime {
     private static final Map<UUID, String> currentActionKey = new HashMap<>();
     /** Tick at which each NPC's current pathfind substep began walking. */
     private static final Map<UUID, Long> pathfindSince = new HashMap<>();
+    /** Last tick each NPC took a unit of starvation damage. */
+    private static final Map<UUID, Long> lastStarvedAt = new HashMap<>();
+
+    /**
+     * Starvation is dealt as whole hit points on a cadence rather than as a
+     * per-drive sliver: vanilla swallows sub-threshold hits inside the
+     * invulnerability window, and one hp per 600 ticks is exactly
+     * {@link Substeps#STARVE_DAMAGE_PER_TICK}. Routing it through
+     * {@code hurt()} means death flows through LivingDeathEvent like any
+     * other death.
+     */
+    public static final int STARVE_INTERVAL_TICKS = 600;
 
     private static int counter;
 
@@ -98,6 +110,15 @@ public final class ActiveStepRuntime {
         lastFiredAt.clear();
         currentActionKey.clear();
         pathfindSince.clear();
+        lastStarvedAt.clear();
+    }
+
+    /** Drop per-NPC transient state — call when an NPC dies. */
+    public static void forget(UUID id) {
+        lastFiredAt.remove(id);
+        currentActionKey.remove(id);
+        pathfindSince.remove(id);
+        lastStarvedAt.remove(id);
     }
 
     private static void drive(ServerLevel level, NPCEntity entity,
@@ -113,6 +134,19 @@ public final class ActiveStepRuntime {
         if (drained != rec) {
             svc.registry().put(drained);
             rec = drained;
+        }
+
+        if (rec.vitals().hunger() <= 0f && entity.isAlive()) {
+            Long last = lastStarvedAt.get(id);
+            if (last == null) {
+                lastStarvedAt.put(id, tick);
+            } else if (tick - last >= STARVE_INTERVAL_TICKS) {
+                lastStarvedAt.put(id, tick);
+                entity.hurt(level.damageSources().starve(), 1.0f);
+                if (!entity.isAlive()) return; // buried by ConsequenceEvents.onDeath
+            }
+        } else if (rec.vitals().hunger() > 0f) {
+            lastStarvedAt.remove(id);
         }
 
         ActionState act = rec.action();

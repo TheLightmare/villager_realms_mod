@@ -64,6 +64,7 @@ public final class ServerLifecycle {
     public static void onServerStopped(ServerStoppedEvent event) {
         TierManager.reset();
         ActiveStepRuntime.reset();
+        ConsequenceEvents.reset();
         AIService.stop();
         PersistenceService.stop();
     }

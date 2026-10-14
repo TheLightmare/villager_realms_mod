@@ -6,6 +6,7 @@ import com.lightmare.villagerrealms.core.ai.EvalContext;
 import com.lightmare.villagerrealms.core.ai.Evaluators;
 import com.lightmare.villagerrealms.core.economy.MarketPricing;
 import com.lightmare.villagerrealms.core.record.ActionState;
+import com.lightmare.villagerrealms.core.record.DeathRecord;
 import com.lightmare.villagerrealms.core.record.EconomicState;
 import com.lightmare.villagerrealms.core.record.Faction;
 import com.lightmare.villagerrealms.core.record.Gender;
@@ -66,12 +67,63 @@ public final class VRCommand {
                                 .then(Commands.argument("uuid", UuidArgument.uuid())
                                         .executes(VRCommand::info)))
                         .then(Commands.literal("faction")
-                                .then(Commands.literal("list").executes(VRCommand::factionList)))
+                                .then(Commands.literal("list").executes(VRCommand::factionList))
+                                .then(Commands.literal("relations").executes(VRCommand::factionRelations)))
+                        .then(Commands.literal("deaths")
+                                .then(Commands.argument("village", StringArgumentType.string())
+                                        .executes(VRCommand::deaths)))
                         .then(Commands.literal("village")
                                 .then(Commands.literal("list").executes(VRCommand::villageList)))
                         .then(Commands.literal("market")
                                 .then(Commands.argument("village", StringArgumentType.string())
                                         .executes(VRCommand::market))));
+    }
+
+    private static int factionRelations(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack src = ctx.getSource();
+        PersistenceService svc = PersistenceService.getOrNull();
+        if (svc == null) {
+            src.sendFailure(Component.literal("[vr] PersistenceService not started"));
+            return 0;
+        }
+        var by = svc.factions().relations().by();
+        if (by.isEmpty()) {
+            line(src, "[vr] no faction relations recorded");
+            return 0;
+        }
+        int rows = 0;
+        for (var viewer : by.entrySet()) {
+            for (var target : viewer.getValue().entrySet()) {
+                rows++;
+                line(src, String.format("[vr] %s -> %s = %d", viewer.getKey(), target.getKey(), target.getValue()));
+            }
+        }
+        return rows;
+    }
+
+    private static int deaths(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack src = ctx.getSource();
+        String villageId = StringArgumentType.getString(ctx, "village");
+        PersistenceService svc = PersistenceService.getOrNull();
+        if (svc == null) {
+            src.sendFailure(Component.literal("[vr] PersistenceService not started"));
+            return 0;
+        }
+        VillageRecord v = svc.villages().get(villageId).orElse(null);
+        if (v == null) {
+            src.sendFailure(Component.literal("[vr] No village '" + villageId + "' (see /vr village list)"));
+            return 0;
+        }
+        if (v.deaths().isEmpty()) {
+            line(src, "[vr] " + villageId + ": no deaths");
+            return 0;
+        }
+        line(src, "[vr] " + villageId + ": " + v.deaths().size() + " deaths (living=" + svc.registry().byVillage(villageId).size() + ")");
+        for (DeathRecord d : v.deaths()) {
+            line(src, String.format("  t=%d %s (%s) %s%s", d.tick(), d.name(), d.roleId(), d.cause(),
+                    d.killerRef() == null ? "" : " by " + d.killerRef()));
+        }
+        return v.deaths().size();
     }
 
     private static int villageList(CommandContext<CommandSourceStack> ctx) {
@@ -363,8 +415,10 @@ public final class VRCommand {
 
         Relationships rel = rec.relationships();
         line(src, "  relationships: "
-                + rel.opinions().size() + " npc, "
+                + rel.opinions().size() + " personal, "
                 + rel.factionOpinions().size() + " faction overrides");
+        for (var e : rel.opinions().entrySet()) line(src, "    " + e.getKey() + " = " + e.getValue());
+        for (var e : rel.factionOpinions().entrySet()) line(src, "    " + e.getKey() + " = " + e.getValue());
 
         MemoryLog mem = rec.memory();
         if (mem.events().isEmpty()) {

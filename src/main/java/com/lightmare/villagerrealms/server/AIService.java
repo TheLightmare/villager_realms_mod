@@ -10,6 +10,7 @@ import com.lightmare.villagerrealms.core.ai.sched.AbstractScheduler;
 import com.lightmare.villagerrealms.core.ai.sched.Markets;
 import com.lightmare.villagerrealms.core.ai.sched.SchedulerStats;
 import com.lightmare.villagerrealms.core.ai.sched.StepExecutor;
+import com.lightmare.villagerrealms.core.economy.Substeps;
 import com.lightmare.villagerrealms.core.persist.store.NPCRegistry;
 import com.lightmare.villagerrealms.core.persist.store.VillageStore;
 import com.lightmare.villagerrealms.core.record.NPCRecord;
@@ -91,10 +92,25 @@ public final class AIService {
      * Run any overdue abstract cycles for this NPC up to {@code currentTick}.
      * Called from the Tier 2 → Tier 0 transition site (entity join / chunk
      * load) so a fresh entity is never projected from a stale record. The
-     * caller is responsible for committing the returned record.
+     * caller is responsible for committing the returned record — and for
+     * checking {@link Substeps#isDead}: catch-up can starve an NPC.
      */
     public NPCRecord catchUp(NPCRecord npc, long currentTick) {
         return abstractScheduler.catchUp(npc, currentTick);
+    }
+
+    /**
+     * Abstract-tick commit: a dormant NPC that starved to zero health is
+     * buried instead of written back.
+     */
+    private static NPCRecord commitAbstract(NPCRegistry registry, NPCRecord rec, long tick) {
+        if (Substeps.isDead(rec)) {
+            PersistenceService svc = PersistenceService.getOrNull();
+            if (svc != null) ConsequenceEvents.onAbstractStarvation(svc, rec, tick);
+            return rec;
+        }
+        registry.put(rec);
+        return rec;
     }
 
     /** Resolve the village view for an NPC; null if the home village isn't loaded. */
@@ -148,7 +164,7 @@ public final class AIService {
                 currentTick,
                 registry.all(),
                 id -> registry.get(id).orElse(null),
-                rec -> { registry.put(rec); return rec; });
+                rec -> commitAbstract(registry, rec, currentTick));
 
         if (currentTick - lastPruneTick >= CACHE_PRUNE_INTERVAL_TICKS) {
             int dropped = cache.pruneStale(currentTick);
