@@ -15,6 +15,8 @@ import com.lightmare.villagerrealms.core.persist.store.NPCRegistry;
 import com.lightmare.villagerrealms.core.persist.store.VillageStore;
 import com.lightmare.villagerrealms.core.record.NPCRecord;
 import com.lightmare.villagerrealms.core.record.VillageRecord;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,8 +77,15 @@ public final class AIService {
             return rec == null ? null : new RecordVillageView(rec);
         };
 
+        AIScheduler.ThreatViewResolver threats = npc -> {
+            PersistenceService svc = PersistenceService.getOrNull();
+            if (svc == null) return null;
+            ServerLevel level = levelFor(svc.server(), npc.location().dimension());
+            return level == null ? null : Threats.view(level, npc, svc.factions().relations());
+        };
+
         this.scheduler = new AIScheduler(full, stripped, cache,
-                budgetPerTick, ACTIVE_CADENCE, NEARBY_CADENCE, views);
+                budgetPerTick, ACTIVE_CADENCE, NEARBY_CADENCE, views, threats);
         this.abstractScheduler = new AbstractScheduler(abstractBudgetPerTick, markets);
     }
 
@@ -116,6 +125,14 @@ public final class AIService {
     /** Resolve the village view for an NPC; null if the home village isn't loaded. */
     public VillageView viewFor(NPCRecord npc) {
         return views.apply(npc);
+    }
+
+    static ServerLevel levelFor(MinecraftServer server, String dimension) {
+        if (server == null || dimension == null) return null;
+        for (ServerLevel level : server.getAllLevels()) {
+            if (level.dimension().location().toString().equals(dimension)) return level;
+        }
+        return null;
     }
 
     public static AIService get() {

@@ -3,6 +3,7 @@ package com.lightmare.villagerrealms.core.ai;
 import com.lightmare.villagerrealms.core.ai.actions.BuyFoodAction;
 import com.lightmare.villagerrealms.core.ai.actions.ConceiveAction;
 import com.lightmare.villagerrealms.core.ai.actions.EatAction;
+import com.lightmare.villagerrealms.core.ai.actions.FleeAction;
 import com.lightmare.villagerrealms.core.ai.actions.IdleAction;
 import com.lightmare.villagerrealms.core.ai.actions.SleepAction;
 import com.lightmare.villagerrealms.core.ai.actions.WorkAction;
@@ -23,6 +24,7 @@ public final class Evaluators {
     public static List<Action> defaultActions() {
         return List.of(
                 new IdleAction(),
+                new FleeAction(),
                 new EatAction(),
                 new BuyFoodAction(),
                 new SleepAction(),

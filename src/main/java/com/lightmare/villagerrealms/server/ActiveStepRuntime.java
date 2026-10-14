@@ -4,6 +4,7 @@ import com.lightmare.villagerrealms.core.ai.Action;
 import com.lightmare.villagerrealms.core.ai.ActionStep;
 import com.lightmare.villagerrealms.core.ai.EvalContext;
 import com.lightmare.villagerrealms.core.ai.Evaluators;
+import com.lightmare.villagerrealms.core.ai.ThreatView;
 import com.lightmare.villagerrealms.core.ai.VillageView;
 import com.lightmare.villagerrealms.core.economy.Substeps;
 import com.lightmare.villagerrealms.core.record.ActionState;
@@ -16,6 +17,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.slf4j.Logger;
@@ -55,6 +57,8 @@ public final class ActiveStepRuntime {
     public static final int ACTION_CADENCE_TICKS = 20;
 
     private static final double MOVE_SPEED = 0.6;
+    private static final double FLEE_SPEED = 0.9;
+    private static final double FLEE_DISTANCE = 12.0;
     private static final double ARRIVE_RADIUS_SQ = 2.5 * 2.5;
 
     /**
@@ -166,7 +170,8 @@ public final class ActiveStepRuntime {
         if (chosen == null) return;
 
         VillageView view = ai.viewFor(rec);
-        EvalContext ctx = new EvalContext(rec, tick, level.getDayTime(), view);
+        ThreatView threat = Threats.view(level, rec, svc.factions().relations());
+        EvalContext ctx = new EvalContext(rec, tick, level.getDayTime(), view, threat);
         List<ActionStep> steps = chosen.plan(ctx);
         if (steps.isEmpty()) {
             entity.getNavigation().stop();
@@ -192,6 +197,7 @@ public final class ActiveStepRuntime {
             case "withdraw": handleWithdraw(entity, rec, step, svc, ai, tick); return;
             case "sleep":    handleSleep(level, entity, rec, svc, tick); return;
             case "conceive": handleConceive(level, entity, rec, svc, tick); return;
+            case "flee":     handleFlee(level, entity, step); return;
             default:
                 // idle / unknown: stand still.
                 if (!entity.getNavigation().isDone()) entity.getNavigation().stop();
@@ -365,6 +371,44 @@ public final class ActiveStepRuntime {
             svc.registry().put(next);
         }
         lastFiredAt.put(entity.getUUID(), tick);
+    }
+
+    /**
+     * Run directly away from the threat position in the step target: a
+     * point {@link #FLEE_DISTANCE} blocks along the NPC→threat axis,
+     * reversed, at surface height. Re-issued whenever navigation finishes
+     * so the NPC keeps its distance while the danger consideration holds.
+     */
+    private static void handleFlee(ServerLevel level, NPCEntity entity, ActionStep step) {
+        double[] threat = parseDoubles(step.target());
+        if (threat == null) {
+            if (!entity.getNavigation().isDone()) entity.getNavigation().stop();
+            return;
+        }
+        if (!entity.getNavigation().isDone()) return;
+        double dx = entity.getX() - threat[0];
+        double dz = entity.getZ() - threat[2];
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len < 0.01) { dx = 1; dz = 0; len = 1; }
+        double tx = entity.getX() + dx / len * FLEE_DISTANCE;
+        double tz = entity.getZ() + dz / len * FLEE_DISTANCE;
+        int ty = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                (int) Math.floor(tx), (int) Math.floor(tz));
+        entity.getNavigation().moveTo(tx, ty, tz, FLEE_SPEED);
+    }
+
+    private static double[] parseDoubles(String spec) {
+        if (spec == null) return null;
+        String[] parts = spec.split(",");
+        if (parts.length != 3) return null;
+        try {
+            return new double[]{
+                    Double.parseDouble(parts[0].trim()),
+                    Double.parseDouble(parts[1].trim()),
+                    Double.parseDouble(parts[2].trim())};
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     /**

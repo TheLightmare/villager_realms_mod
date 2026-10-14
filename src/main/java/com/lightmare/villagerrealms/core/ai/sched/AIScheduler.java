@@ -3,6 +3,7 @@ package com.lightmare.villagerrealms.core.ai.sched;
 import com.lightmare.villagerrealms.core.ai.Decision;
 import com.lightmare.villagerrealms.core.ai.EvalContext;
 import com.lightmare.villagerrealms.core.ai.Evaluator;
+import com.lightmare.villagerrealms.core.ai.ThreatView;
 import com.lightmare.villagerrealms.core.ai.VillageView;
 import com.lightmare.villagerrealms.core.ai.cache.ConsiderationCache;
 import com.lightmare.villagerrealms.core.record.NPCRecord;
@@ -68,7 +69,16 @@ public final class AIScheduler {
     @FunctionalInterface
     public interface VillageViewResolver extends Function<NPCRecord, VillageView> {}
 
+    /**
+     * Resolves the nearest hostile actor for an NPC. Return null when there
+     * is none or the NPC has no entity (Tier 1); {@code DangerConsideration}
+     * still reads memory.
+     */
+    @FunctionalInterface
+    public interface ThreatViewResolver extends Function<NPCRecord, ThreatView> {}
+
     private static final VillageViewResolver NO_VIEW = npc -> null;
+    private static final ThreatViewResolver NO_THREAT = npc -> null;
 
     private final Evaluator full;
     private final Evaluator stripped;
@@ -77,6 +87,7 @@ public final class AIScheduler {
     private final int activeCadence;
     private final int nearbyCadence;
     private final VillageViewResolver views;
+    private final ThreatViewResolver threats;
 
     private final Deque<UUID> overflow = new ArrayDeque<>();
     private final Set<UUID> overflowSet = new HashSet<>();
@@ -89,6 +100,12 @@ public final class AIScheduler {
     public AIScheduler(Evaluator full, Evaluator stripped, ConsiderationCache cache,
                        int budgetPerTick, int activeCadence, int nearbyCadence,
                        VillageViewResolver views) {
+        this(full, stripped, cache, budgetPerTick, activeCadence, nearbyCadence, views, NO_THREAT);
+    }
+
+    public AIScheduler(Evaluator full, Evaluator stripped, ConsiderationCache cache,
+                       int budgetPerTick, int activeCadence, int nearbyCadence,
+                       VillageViewResolver views, ThreatViewResolver threats) {
         if (full == null || stripped == null) {
             throw new IllegalArgumentException("evaluators required");
         }
@@ -104,6 +121,7 @@ public final class AIScheduler {
         this.activeCadence = activeCadence;
         this.nearbyCadence = nearbyCadence;
         this.views = views == null ? NO_VIEW : views;
+        this.threats = threats == null ? NO_THREAT : threats;
     }
 
     public ConsiderationCache cache() { return cache; }
@@ -162,7 +180,8 @@ public final class AIScheduler {
         Tier tier = rec.location().tier();
         Evaluator e = tier == Tier.ACTIVE ? full : stripped;
         VillageView view = views.apply(rec);
-        EvalContext ctx = new EvalContext(rec, tick, dayTime, view);
+        ThreatView threat = tier == Tier.ACTIVE ? threats.apply(rec) : null;
+        EvalContext ctx = new EvalContext(rec, tick, dayTime, view, threat);
         Decision d = e.evaluate(ctx, cache);
         NPCRecord updated = applier.apply(rec, d, tick);
         if (updated != null && updated != rec) {
