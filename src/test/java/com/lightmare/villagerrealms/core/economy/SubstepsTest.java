@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -218,6 +219,22 @@ class SubstepsTest {
         NPCRecord npc = Fixtures.npc(UUID.randomUUID(), "v1", 0, 0);
         npc = withVitals(npc, new Vitals(20f, 5f, 0.5f, 0.5f));
         assertSame(npc, Substeps.drain(npc, 0L));
+    }
+
+    @Test
+    void starveOnlyBitesAtZeroHunger() {
+        NPCRecord fed = withVitals(Fixtures.npc(UUID.randomUUID(), "v1", 0, 0), new Vitals(20f, 0.5f, 1f, 0.5f));
+        assertSame(fed, Substeps.starve(fed, 600L));
+
+        NPCRecord starving = withVitals(Fixtures.npc(UUID.randomUUID(), "v1", 0, 0), new Vitals(20f, 0f, 1f, 0.5f));
+        NPCRecord after = Substeps.starve(starving, 600L);
+        assertEquals(19f, after.vitals().health(), 0.0001f, "1 hp per 600 ticks");
+        assertFalse(Substeps.isDead(after));
+
+        NPCRecord dead = Substeps.starve(starving, 600L * 20L);
+        assertEquals(0f, dead.vitals().health(), 0.0001f);
+        assertTrue(Substeps.isDead(dead));
+        assertSame(dead, Substeps.starve(dead, 600L), "no further change once dead");
     }
 
     @Test

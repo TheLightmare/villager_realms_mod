@@ -80,6 +80,7 @@ public final class AbstractTick {
         for (long i = 0; i < cycles; i++) {
             simTick += CADENCE_TICKS;
             rec = applyCycle(rec, simTick, markets);
+            if (Substeps.isDead(rec)) break;
         }
         return rec;
     }
@@ -89,8 +90,13 @@ public final class AbstractTick {
      * through {@link #advance}.
      */
     public static NPCRecord applyCycle(NPCRecord rec, long simTick, Markets markets) {
+        if (Substeps.isDead(rec)) return rec;
         rec = Substeps.drain(rec, CADENCE_TICKS);
         rec = maybeFeed(rec, simTick, markets);
+        // Starvation is checked after the feed attempt so a dormant NPC with
+        // food on hand (or gold and a stocked market) eats before taking damage.
+        rec = Substeps.starve(rec, CADENCE_TICKS);
+        if (Substeps.isDead(rec)) return rec;
         if (isWorkTime(simTick, rec)) {
             rec = maybeWork(rec, markets, simTick);
         } else {

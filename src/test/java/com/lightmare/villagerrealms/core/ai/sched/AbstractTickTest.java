@@ -355,6 +355,47 @@ class AbstractTickTest {
     }
 
     @Test
+    void dormantNpcWithNoFoodAndNoGoldStarvesToDeathAndStopsSimulating() {
+        NPCRecord rec = asDormant(Fixtures.npc(UUID.randomUUID(), "v", 0, 0));
+        rec = withInventory(rec, NPCInventory.EMPTY);
+        rec = new NPCRecord(
+                rec.dataVersion(), rec.identity(), rec.location(),
+                new Vitals(20f, 0f, 1f, 0.5f), rec.inventory(),
+                new com.lightmare.villagerrealms.core.record.EconomicState(0L, List.of(), List.of()),
+                rec.role(), rec.factionId(), rec.relationships(), rec.memory(), rec.action());
+
+        MapMarkets markets = new MapMarkets();
+        markets.put("v", VillageMarket.EMPTY);
+
+        // 20 hp at 1 hp / 600 ticks = 12000 ticks = 120 cycles. Give it 150.
+        long from = sleepTimeAt();
+        NPCRecord after = AbstractTick.advance(rec, from, from + AbstractTick.CADENCE_TICKS * 150L, markets);
+        assertTrue(com.lightmare.villagerrealms.core.economy.Substeps.isDead(after), "should have starved");
+        assertEquals(0f, after.vitals().health(), 0.0001f);
+
+        // A dead record is inert: further cycles change nothing.
+        assertSame(after, AbstractTick.applyCycle(after, from + 99999L, markets));
+    }
+
+    @Test
+    void dormantNpcWithFoodEatsInsteadOfStarving() {
+        NPCRecord rec = asDormant(Fixtures.npc(UUID.randomUUID(), "v", 0, 0));
+        rec = withInventory(rec, new NPCInventory(List.of(
+                new ItemEntry("minecraft:bread", 10, Provenance.CRAFTED, 0L))));
+        rec = new NPCRecord(
+                rec.dataVersion(), rec.identity(), rec.location(),
+                new Vitals(20f, 0f, 1f, 0.5f), rec.inventory(), rec.economy(),
+                rec.role(), rec.factionId(), rec.relationships(), rec.memory(), rec.action());
+
+        MapMarkets markets = new MapMarkets();
+        markets.put("v", VillageMarket.EMPTY);
+
+        NPCRecord after = AbstractTick.applyCycle(rec, sleepTimeAt() + AbstractTick.CADENCE_TICKS, markets);
+        assertEquals(20f, after.vitals().health(), 0.0001f, "ate before the starvation check");
+        assertTrue(after.vitals().hunger() > 0f);
+    }
+
+    @Test
     void catchUpIsNoopOnFirstSightAndAdvancesAfter() {
         UUID id = UUID.randomUUID();
         final NPCRecord rec = withHunger(

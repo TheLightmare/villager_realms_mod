@@ -48,7 +48,35 @@ public final class Substeps {
      */
     public static final float ENERGY_RESTORE_PER_TICK = 1f / 400f;
 
+    /**
+     * Health lost per tick while hunger sits at zero: 1 hp per 600 ticks, so
+     * a fully-healthy NPC starves to death in 12000 ticks (half a day) of
+     * continuous hunger-zero. The active runtime applies this as vanilla
+     * starvation damage on the entity; the abstract tick applies it to the
+     * record directly. Same rate either way.
+     */
+    public static final float STARVE_DAMAGE_PER_TICK = 1f / 600f;
+
     private Substeps() {}
+
+    /**
+     * Starvation damage proportional to {@code elapsedTicks}, applied only
+     * while hunger is zero. Health clamps at 0; see {@link #isDead}.
+     */
+    public static NPCRecord starve(NPCRecord npc, long elapsedTicks) {
+        if (elapsedTicks <= 0L) return npc;
+        Vitals v = npc.vitals();
+        if (v.hunger() > 0f || v.health() <= 0f) return npc;
+        float newHealth = Math.max(0f, v.health() - STARVE_DAMAGE_PER_TICK * elapsedTicks);
+        if (newHealth == v.health()) return npc;
+        return rebuild(npc, npc.inventory(), npc.economy(),
+                new Vitals(newHealth, v.hunger(), v.energy(), v.mood()));
+    }
+
+    /** True once health has reached zero; the record should be buried, not simulated. */
+    public static boolean isDead(NPCRecord npc) {
+        return npc != null && npc.vitals().health() <= 0f;
+    }
 
     /**
      * Drain hunger and energy proportional to {@code elapsedTicks}. Returns

@@ -30,20 +30,34 @@ public final class OpinionResolver {
 
     public static int effective(NPCRecord viewer, NPCRecord target, FactionRelations relations) {
         if (viewer == null || target == null) return 0;
+        return effectiveTowards(viewer, target.factionId(), target.identity().uuid(), relations);
+    }
+
+    /**
+     * Same chain for a target that need not be an NPC. {@code targetGroup}
+     * is what the faction-level lookups key on: another NPC's faction id, or
+     * a {@link com.lightmare.villagerrealms.core.consequence.Refs} ref such as
+     * {@code player:<uuid>} (players are not factions; their standing is a
+     * matrix row against their ref). {@code targetUuid} drives the personal
+     * override and may be null.
+     */
+    public static int effectiveTowards(NPCRecord viewer, String targetGroup, UUID targetUuid,
+                                       FactionRelations relations) {
+        if (viewer == null) return 0;
         Relationships rel = viewer.relationships();
-        UUID targetId = target.identity().uuid();
 
-        Integer perNpc = rel.opinions().get(targetId);
-        if (perNpc != null) return perNpc;
+        if (targetUuid != null) {
+            Integer perNpc = rel.opinions().get(targetUuid);
+            if (perNpc != null) return perNpc;
+        }
 
-        String targetFaction = target.factionId();
-        if (targetFaction != null && !targetFaction.isEmpty()) {
-            Integer perFaction = rel.factionOpinions().get(targetFaction);
+        if (targetGroup != null && !targetGroup.isEmpty()) {
+            Integer perFaction = rel.factionOpinions().get(targetGroup);
             if (perFaction != null) return perFaction;
 
             String viewerFaction = viewer.factionId();
             if (viewerFaction != null && !viewerFaction.isEmpty() && relations != null) {
-                return relations.opinion(viewerFaction, targetFaction);
+                return relations.opinion(viewerFaction, targetGroup);
             }
         }
         return 0;
