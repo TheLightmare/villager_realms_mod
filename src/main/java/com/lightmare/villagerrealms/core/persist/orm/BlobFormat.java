@@ -6,6 +6,7 @@ public final class BlobFormat {
     public static final int MAGIC_NPC_SHARD     = 0x56524E53; // "VRNS"
     public static final int MAGIC_VILLAGE_STORE = 0x56525653; // "VRVS"
     public static final int MAGIC_FACTION_STORE = 0x56524653; // "VRFS"
+    public static final int MAGIC_SCHEDULE_STORE = 0x56525343; // "VRSC"
 
     private BlobFormat() {}
 }

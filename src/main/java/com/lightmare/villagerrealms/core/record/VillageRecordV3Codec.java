@@ -30,7 +30,7 @@ public final class VillageRecordV3Codec {
             .field(Codecs.INT, VillageRecord::maxY)
             .field(Codecs.INT, VillageRecord::maxZ)
             .field(Codecs.BOOL, VillageRecord::audited)
-            .field(Codecs.list(VillageRecordCodec.BED), VillageRecord::beds)
+            .field(Codecs.list(VillageRecordCodec.BED_LEGACY), VillageRecord::beds)
             .field(Codecs.list(VillageRecordCodec.WORKSTATION), VillageRecord::workstations)
             .field(VillageRecordCodec.MARKET, VillageRecord::market)
             .field(Codecs.nullable(Codecs.STRING), VillageRecord::factionOwnerId)

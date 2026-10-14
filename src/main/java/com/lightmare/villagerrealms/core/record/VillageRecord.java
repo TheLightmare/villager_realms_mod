@@ -18,7 +18,7 @@ public record VillageRecord(
         List<DeathRecord> deaths
 ) implements Versioned {
 
-    public static final int CURRENT_VERSION = 4;
+    public static final int CURRENT_VERSION = 5;
 
     /**
      * Ring cap on the death ledger. Old deaths roll off; the ledger exists
@@ -88,6 +88,75 @@ public record VillageRecord(
                 dataVersion, villageId, dimension,
                 minX, minY, minZ, maxX, maxY, maxZ,
                 audited, nextBeds, workstations, market, factionOwnerId, nextDeaths);
+    }
+
+    // -------- beds: occupancy and reservation ---------------------------
+
+    /** Index of the first bed with neither occupant nor reservation, or -1. */
+    public int firstFreeBedIndex() {
+        for (int i = 0; i < beds.size(); i++) if (beds.get(i).isFree()) return i;
+        return -1;
+    }
+
+    public int freeBedCount() {
+        int n = 0;
+        for (VillageBed b : beds) if (b.isFree()) n++;
+        return n;
+    }
+
+    /** Index of the bed {@code uuid} occupies, or -1. */
+    public int bedIndexOf(UUID uuid) {
+        if (uuid == null) return -1;
+        for (int i = 0; i < beds.size(); i++) if (uuid.equals(beds.get(i).occupant())) return i;
+        return -1;
+    }
+
+    /** Index of the bed reserved for unborn {@code child}, or -1. */
+    public int reservedBedIndexOf(UUID child) {
+        if (child == null) return -1;
+        for (int i = 0; i < beds.size(); i++) if (child.equals(beds.get(i).reservedFor())) return i;
+        return -1;
+    }
+
+    public VillageRecord withBeds(List<VillageBed> newBeds) {
+        return new VillageRecord(
+                dataVersion, villageId, dimension,
+                minX, minY, minZ, maxX, maxY, maxZ,
+                audited, newBeds, workstations, market, factionOwnerId, deaths);
+    }
+
+    /** Reserve the free bed at {@code index} for unborn {@code child}. The bed must be free. */
+    public VillageRecord reserveBed(int index, UUID child) {
+        if (child == null) throw new IllegalArgumentException("child required");
+        VillageBed bed = beds.get(index);
+        if (!bed.isFree()) throw new IllegalStateException("bed " + index + " is not free");
+        List<VillageBed> next = new ArrayList<>(beds);
+        next.set(index, bed.withReservation(child));
+        return withBeds(next);
+    }
+
+    /** Drop the reservation held for {@code child}, if any. */
+    public VillageRecord releaseReservation(UUID child) {
+        int idx = reservedBedIndexOf(child);
+        if (idx < 0) return this;
+        List<VillageBed> next = new ArrayList<>(beds);
+        next.set(idx, beds.get(idx).withReservation(null));
+        return withBeds(next);
+    }
+
+    /**
+     * Turn {@code child}'s reservation into occupancy. If the reservation
+     * was lost, falls back to any free bed. Returns null if no bed can be
+     * claimed — the caller decides what a birth without a bed means.
+     */
+    public VillageRecord occupyReserved(UUID child) {
+        if (child == null) throw new IllegalArgumentException("child required");
+        int idx = reservedBedIndexOf(child);
+        if (idx < 0) idx = firstFreeBedIndex();
+        if (idx < 0) return null;
+        List<VillageBed> next = new ArrayList<>(beds);
+        next.set(idx, beds.get(idx).withReservation(null).withOccupant(child));
+        return withBeds(next);
     }
 
     public VillageRecord withMarket(VillageMarket newMarket) {

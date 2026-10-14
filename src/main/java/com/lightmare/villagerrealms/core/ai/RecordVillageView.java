@@ -2,7 +2,6 @@ package com.lightmare.villagerrealms.core.ai;
 
 import com.lightmare.villagerrealms.core.economy.Foods;
 import com.lightmare.villagerrealms.core.economy.MarketPricing;
-import com.lightmare.villagerrealms.core.record.VillageBed;
 import com.lightmare.villagerrealms.core.record.VillageMarket;
 import com.lightmare.villagerrealms.core.record.VillageRecord;
 
@@ -31,11 +30,10 @@ public final class RecordVillageView implements VillageView {
         return marketFoodUnits();
     }
 
+    /** Beds with neither an occupant nor a reservation for an unborn child. */
     @Override
     public int freeBeds() {
-        int free = 0;
-        for (VillageBed b : village.beds()) if (b.occupant() == null) free++;
-        return free;
+        return village.freeBedCount();
     }
 
     @Override

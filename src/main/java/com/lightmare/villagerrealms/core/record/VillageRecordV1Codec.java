@@ -31,7 +31,7 @@ public final class VillageRecordV1Codec {
             .field(Codecs.INT, VillageRecord::maxY)
             .field(Codecs.INT, VillageRecord::maxZ)
             .field(Codecs.BOOL, VillageRecord::audited)
-            .field(Codecs.list(VillageRecordCodec.BED), VillageRecord::beds)
+            .field(Codecs.list(VillageRecordCodec.BED_LEGACY), VillageRecord::beds)
             .field(Codecs.list(VillageRecordCodec.WORKSTATION), VillageRecord::workstations)
             .build(a -> new VillageRecord(
                     (Integer) a[0], (String) a[1], (String) a[2],

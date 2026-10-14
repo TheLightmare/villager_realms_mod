@@ -4,12 +4,14 @@ import com.lightmare.villagerrealms.core.persist.orm.BinaryWriter;
 import com.lightmare.villagerrealms.core.persist.orm.BlobFormat;
 import com.lightmare.villagerrealms.core.persist.orm.Codec;
 import com.lightmare.villagerrealms.core.persist.orm.Codecs;
+import com.lightmare.villagerrealms.core.record.DeathRecord;
 import com.lightmare.villagerrealms.core.record.VillageBed;
 import com.lightmare.villagerrealms.core.record.VillageMarket;
 import com.lightmare.villagerrealms.core.record.VillageRecord;
 import com.lightmare.villagerrealms.core.record.VillageRecordV1Codec;
 import com.lightmare.villagerrealms.core.record.VillageRecordV2Codec;
 import com.lightmare.villagerrealms.core.record.VillageRecordV3Codec;
+import com.lightmare.villagerrealms.core.record.VillageRecordV4Codec;
 import com.lightmare.villagerrealms.core.record.VillageWorkstation;
 import org.junit.jupiter.api.Test;
 
@@ -77,6 +79,31 @@ class VillageStoreMigrationTest {
         assertEquals("village_b", r.villageId());
         assertNull(r.factionOwnerId(), "v2 records had no faction ownership");
         assertTrue(r.deaths().isEmpty());
+    }
+
+    @Test
+    void v4PayloadUpgradedToV5KeepingLedgerWithUnreservedBeds() throws Exception {
+        UUID occupant = UUID.randomUUID();
+        VillageRecord v4 = new VillageRecord(
+                4, "village_d", "minecraft:overworld",
+                0, 60, 0, 16, 70, 16, true,
+                List.of(new VillageBed(1, 64, 1, "farmer", occupant), new VillageBed(2, 64, 2, "laborer", null)),
+                List.of(new VillageWorkstation(2, 64, 2, "farmer")),
+                VillageMarket.EMPTY,
+                "faction:village_d",
+                List.of(new DeathRecord(UUID.randomUUID(), "Old", "farmer", 5L, "starvation", null)));
+        Codec<List<VillageRecord>> v4List = Codecs.list(VillageRecordV4Codec.VILLAGE_V4);
+        byte[] payload = v4List.toBytes(List.of(v4));
+
+        List<VillageRecord> upgraded = VillageStoreFormat.FORMAT.fromBytes(blob(4, payload));
+        assertEquals(1, upgraded.size());
+        VillageRecord r = upgraded.get(0);
+        assertEquals(VillageRecord.CURRENT_VERSION, r.dataVersion());
+        assertEquals(1, r.deaths().size(), "v4 ledger must survive");
+        assertEquals(occupant, r.beds().get(0).occupant());
+        assertNull(r.beds().get(0).reservedFor());
+        assertTrue(r.beds().get(1).isFree());
+        assertEquals("faction:village_d", r.factionOwnerId());
     }
 
     @Test

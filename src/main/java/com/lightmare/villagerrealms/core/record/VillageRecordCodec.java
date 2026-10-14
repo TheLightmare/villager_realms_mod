@@ -12,7 +12,8 @@ public final class VillageRecordCodec {
 
     private VillageRecordCodec() {}
 
-    public static final Codec<VillageBed> BED = RecordCodec.<VillageBed>builder()
+    /** Bed shape through VillageRecord v4 (no reservation). Used by the frozen v1–v4 codecs only. */
+    public static final Codec<VillageBed> BED_LEGACY = RecordCodec.<VillageBed>builder()
             .field(Codecs.INT, VillageBed::x)
             .field(Codecs.INT, VillageBed::y)
             .field(Codecs.INT, VillageBed::z)
@@ -20,7 +21,18 @@ public final class VillageRecordCodec {
             .field(Codecs.nullable(Codecs.UUID_), VillageBed::occupant)
             .build(a -> new VillageBed(
                     (Integer) a[0], (Integer) a[1], (Integer) a[2],
-                    (String) a[3], (UUID) a[4]));
+                    (String) a[3], (UUID) a[4], null));
+
+    public static final Codec<VillageBed> BED = RecordCodec.<VillageBed>builder()
+            .field(Codecs.INT, VillageBed::x)
+            .field(Codecs.INT, VillageBed::y)
+            .field(Codecs.INT, VillageBed::z)
+            .field(Codecs.STRING, VillageBed::role)
+            .field(Codecs.nullable(Codecs.UUID_), VillageBed::occupant)
+            .field(Codecs.nullable(Codecs.UUID_), VillageBed::reservedFor)
+            .build(a -> new VillageBed(
+                    (Integer) a[0], (Integer) a[1], (Integer) a[2],
+                    (String) a[3], (UUID) a[4], (UUID) a[5]));
 
     public static final Codec<VillageWorkstation> WORKSTATION = RecordCodec.<VillageWorkstation>builder()
             .field(Codecs.INT, VillageWorkstation::x)
