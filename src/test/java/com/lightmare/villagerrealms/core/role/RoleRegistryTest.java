@@ -64,6 +64,14 @@ class RoleRegistryTest {
     }
 
     @Test
+    void childIsANonWorkerWithNoStation() {
+        Role child = RoleRegistry.get(RoleRegistry.CHILD).orElseThrow();
+        assertFalse(child.worker());
+        assertTrue(child.produces().isEmpty());
+        assertEquals("", child.workstationKind());
+    }
+
+    @Test
     void replaceAllSwapsTheSetButKeepsALaborerFallback() {
         RoleRegistry.replaceAll(List.of(
                 new Role("miner", true, List.of(), List.of(new RoleItemSpec("minecraft:coal", 1)), "miner")));

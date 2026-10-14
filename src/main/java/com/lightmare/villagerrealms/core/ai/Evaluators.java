@@ -1,6 +1,7 @@
 package com.lightmare.villagerrealms.core.ai;
 
 import com.lightmare.villagerrealms.core.ai.actions.BuyFoodAction;
+import com.lightmare.villagerrealms.core.ai.actions.ConceiveAction;
 import com.lightmare.villagerrealms.core.ai.actions.EatAction;
 import com.lightmare.villagerrealms.core.ai.actions.IdleAction;
 import com.lightmare.villagerrealms.core.ai.actions.SleepAction;
@@ -25,7 +26,8 @@ public final class Evaluators {
                 new EatAction(),
                 new BuyFoodAction(),
                 new SleepAction(),
-                new WorkAction());
+                new WorkAction(),
+                new ConceiveAction());
     }
 
     public static Evaluator full() {

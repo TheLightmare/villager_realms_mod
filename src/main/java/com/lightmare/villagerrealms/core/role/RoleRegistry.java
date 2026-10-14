@@ -34,6 +34,9 @@ public final class RoleRegistry {
 
     public static final String LABORER = "laborer";
 
+    /** Non-worker role for NPCs born in-world; ages up into the bed's role (see core/birth). */
+    public static final String CHILD = "child";
+
     /** What foragers (laborer and the non-food vanilla professions) produce. */
     public static final String FORAGE_ITEM = "minecraft:carrot";
 
@@ -63,7 +66,8 @@ public final class RoleRegistry {
                 forager("armorer"),
                 forager("fletcher"),
                 forager("leatherworker"),
-                forager("weaponsmith"));
+                forager("weaponsmith"),
+                new Role(CHILD, false, List.of(), List.of(), ""));
     }
 
     public static synchronized void resetToDefaults() {

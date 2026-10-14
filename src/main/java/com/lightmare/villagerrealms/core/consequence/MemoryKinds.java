@@ -11,6 +11,12 @@ public final class MemoryKinds {
     public static final String GIFT_RECEIVED = "GIFT_RECEIVED";
     /** This NPC's role changed. subject = null; detail = "from -> to". */
     public static final String ROLE_CHANGED = "ROLE_CHANGED";
+    /** This NPC is expecting a child. subject = partner ref; detail = child uuid. Starts the conception cooldown. */
+    public static final String CHILD_CONCEIVED = "CHILD_CONCEIVED";
+    /** This NPC's child was born. subject = child ref. */
+    public static final String CHILD_BORN = "CHILD_BORN";
+    /** This NPC was born. subject = parent ref (one event per parent). */
+    public static final String BORN_TO = "BORN_TO";
 
     private MemoryKinds() {}
 }

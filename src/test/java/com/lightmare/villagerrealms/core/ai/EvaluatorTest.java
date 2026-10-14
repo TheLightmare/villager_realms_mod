@@ -1,6 +1,7 @@
 package com.lightmare.villagerrealms.core.ai;
 
 import com.lightmare.villagerrealms.core.Fixtures;
+import com.lightmare.villagerrealms.core.ai.actions.ConceiveAction;
 import com.lightmare.villagerrealms.core.ai.actions.EatAction;
 import com.lightmare.villagerrealms.core.ai.actions.SleepAction;
 import com.lightmare.villagerrealms.core.ai.actions.WorkAction;
@@ -64,6 +65,38 @@ class EvaluatorTest {
         var fullPick = Evaluators.full().evaluate(ctx, new ConsiderationCache());
         var stripPick = Evaluators.stripped().evaluate(ctx, new ConsiderationCache());
         assertEquals(fullPick.action().id(), stripPick.action().id());
+    }
+
+    private static VillageView readyVillage() {
+        return new VillageView() {
+            @Override public String villageId() { return "village"; }
+            @Override public int communalFoodUnits() { return 5; }
+            @Override public int freeBeds() { return 1; }
+            @Override public int marketFoodUnits() { return 5; }
+            @Override public String cheapestFoodInMarket() { return "minecraft:bread"; }
+            @Override public long marketPriceOf(String itemId) { return 3L; }
+            @Override public long villageGold() { return 0L; }
+        };
+    }
+
+    @Test
+    void fedRestedNpcWithAFreeBedConceivesAtNight() {
+        var npc = vitals(new Vitals(20f, 20f, 1f, 0.5f)); // Fixtures: age 30, no memory cooldown
+        Decision d = Evaluators.full().evaluate(new EvalContext(npc, 18000L, 18000L, readyVillage()), new ConsiderationCache());
+        assertEquals(ConceiveAction.ID, d.action().id(), "nothing pressing at night → start a family");
+    }
+
+    @Test
+    void conceiveNeverOutranksWorkAtMidday() {
+        var npc = vitals(new Vitals(20f, 20f, 1f, 0.5f));
+        Decision d = Evaluators.full().evaluate(new EvalContext(npc, 6000L, 6000L, readyVillage()), new ConsiderationCache());
+        assertEquals(WorkAction.ID, d.action().id());
+    }
+
+    @Test
+    void conceiveIsNotInTheStrippedSet() {
+        boolean has = Evaluators.stripped().candidates().stream().anyMatch(a -> a.id().equals(ConceiveAction.ID));
+        assertTrue(!has, "Tier-1 never conceives via IAUS; the abstract sweep covers it");
     }
 
     @Test
