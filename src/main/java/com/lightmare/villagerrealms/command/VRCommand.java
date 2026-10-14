@@ -19,6 +19,7 @@ import com.lightmare.villagerrealms.core.record.NPCInventory;
 import com.lightmare.villagerrealms.core.record.NPCRecord;
 import com.lightmare.villagerrealms.core.record.Relationships;
 import com.lightmare.villagerrealms.core.record.RoleState;
+import com.lightmare.villagerrealms.core.record.ScheduledEvent;
 import com.lightmare.villagerrealms.core.record.Tier;
 import com.lightmare.villagerrealms.core.record.Traits;
 import com.lightmare.villagerrealms.core.record.VillageMarket;
@@ -26,6 +27,7 @@ import com.lightmare.villagerrealms.core.record.VillageRecord;
 import com.lightmare.villagerrealms.core.record.Vitals;
 import com.lightmare.villagerrealms.entity.NPCEntity;
 import com.lightmare.villagerrealms.server.AIService;
+import com.lightmare.villagerrealms.server.BirthService;
 import com.lightmare.villagerrealms.server.PersistenceService;
 import com.lightmare.villagerrealms.server.Reconciler;
 import com.lightmare.villagerrealms.server.TierManager;
@@ -42,6 +44,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -72,11 +75,60 @@ public final class VRCommand {
                         .then(Commands.literal("deaths")
                                 .then(Commands.argument("village", StringArgumentType.string())
                                         .executes(VRCommand::deaths)))
+                        .then(Commands.literal("schedule").executes(VRCommand::schedule))
+                        .then(Commands.literal("conceive")
+                                .then(Commands.argument("uuid", UuidArgument.uuid())
+                                        .executes(VRCommand::conceive)))
                         .then(Commands.literal("village")
                                 .then(Commands.literal("list").executes(VRCommand::villageList)))
                         .then(Commands.literal("market")
                                 .then(Commands.argument("village", StringArgumentType.string())
                                         .executes(VRCommand::market))));
+    }
+
+    private static int schedule(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack src = ctx.getSource();
+        PersistenceService svc = PersistenceService.getOrNull();
+        if (svc == null) {
+            src.sendFailure(Component.literal("[vr] PersistenceService not started"));
+            return 0;
+        }
+        long now = src.getServer().overworld().getGameTime();
+        List<ScheduledEvent> events = new ArrayList<>(svc.schedule().all());
+        events.sort(java.util.Comparator.comparingLong(ScheduledEvent::dueTick));
+        if (events.isEmpty()) {
+            line(src, "[vr] schedule empty (now=" + now + ")");
+            return 0;
+        }
+        line(src, "[vr] " + events.size() + " scheduled events (now=" + now + ")");
+        for (ScheduledEvent e : events) {
+            line(src, String.format("  %s in %dt village=%s subject=%s %s",
+                    e.kind(), e.dueTick() - now, e.villageId(), e.subject(), e.data()));
+        }
+        return events.size();
+    }
+
+    private static int conceive(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack src = ctx.getSource();
+        UUID id = UuidArgument.getUuid(ctx, "uuid");
+        PersistenceService svc = PersistenceService.getOrNull();
+        if (svc == null) {
+            src.sendFailure(Component.literal("[vr] PersistenceService not started"));
+            return 0;
+        }
+        NPCRecord rec = svc.registry().get(id).orElse(null);
+        if (rec == null) {
+            src.sendFailure(Component.literal("[vr] No NPC with uuid " + id));
+            return 0;
+        }
+        UUID partner = BirthService.tryConceive(svc, rec, src.getServer().overworld().getGameTime());
+        if (partner == null) {
+            src.sendFailure(Component.literal("[vr] " + rec.identity().name()
+                    + " can't conceive now (not ready, no partner, or no free bed — see /vr info)"));
+            return 0;
+        }
+        src.sendSuccess(() -> Component.literal("[vr] " + rec.identity().name() + " is expecting with " + partner), true);
+        return 1;
     }
 
     private static int factionRelations(CommandContext<CommandSourceStack> ctx) {
@@ -137,10 +189,12 @@ public final class VRCommand {
         for (VillageRecord v : svc.villages().all()) {
             n++;
             int npcs = svc.registry().byVillage(v.villageId()).size();
-            line(src, String.format("[vr] %s dim=%s centre=%d,%d,%d beds=%d workstations=%d npcs=%d audited=%s faction=%s",
+            int reserved = 0;
+            for (var b : v.beds()) if (b.isReserved()) reserved++;
+            line(src, String.format("[vr] %s dim=%s centre=%d,%d,%d beds=%d (free=%d reserved=%d) workstations=%d npcs=%d audited=%s faction=%s",
                     v.villageId(), v.dimension(),
                     v.centerX(), v.groundY(), v.centerZ(),
-                    v.beds().size(), v.workstations().size(), npcs, v.audited(),
+                    v.beds().size(), v.freeBedCount(), reserved, v.workstations().size(), npcs, v.audited(),
                     v.factionOwnerId() == null ? "<none>" : v.factionOwnerId()));
         }
         if (n == 0) line(src, "[vr] no villages known");

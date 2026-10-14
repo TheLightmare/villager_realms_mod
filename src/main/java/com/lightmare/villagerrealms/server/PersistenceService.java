@@ -3,6 +3,7 @@ package com.lightmare.villagerrealms.server;
 import com.lightmare.villagerrealms.core.persist.shard.PersistenceWorker;
 import com.lightmare.villagerrealms.core.persist.store.FactionStore;
 import com.lightmare.villagerrealms.core.persist.store.NPCRegistry;
+import com.lightmare.villagerrealms.core.persist.store.ScheduleStore;
 import com.lightmare.villagerrealms.core.persist.store.VillageStore;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -29,6 +30,7 @@ public final class PersistenceService {
     private final NPCRegistry registry;
     private final VillageStore villages;
     private final FactionStore factions;
+    private final ScheduleStore schedule;
     private final PersistenceWorker worker;
 
     private PersistenceService(MinecraftServer server, Path dataRoot) {
@@ -37,13 +39,23 @@ public final class PersistenceService {
         this.registry = new NPCRegistry(dataRoot.resolve("npcs"), worker);
         this.villages = new VillageStore(dataRoot, worker);
         this.factions = new FactionStore(dataRoot, worker);
+        this.schedule = new ScheduleStore(dataRoot, worker);
     }
 
     public MinecraftServer server() { return server; }
     public NPCRegistry registry() { return registry; }
     public VillageStore villages() { return villages; }
     public FactionStore factions() { return factions; }
+    public ScheduleStore schedule() { return schedule; }
     public PersistenceWorker worker() { return worker; }
+
+    /** Snapshot every store's dirty state to the worker. */
+    public void flushAll() throws IOException {
+        registry.flushDirty();
+        villages.flushDirty();
+        factions.flushDirty();
+        schedule.flushDirty();
+    }
 
     public static PersistenceService get() {
         PersistenceService c = current;
@@ -69,6 +81,7 @@ public final class PersistenceService {
         svc.registry.load();
         svc.villages.load();
         svc.factions.load();
+        svc.schedule.load();
         current = svc;
         LOG.info("PersistenceService started at {}", dataRoot);
     }
@@ -77,9 +90,7 @@ public final class PersistenceService {
         PersistenceService svc = current;
         if (svc == null) return;
         try {
-            svc.registry.flushDirty();
-            svc.villages.flushDirty();
-            svc.factions.flushDirty();
+            svc.flushAll();
             svc.worker.awaitIdle(10_000);
         } catch (Exception e) {
             LOG.error("Error during final flush: {}", e.toString(), e);

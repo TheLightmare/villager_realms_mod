@@ -52,9 +52,7 @@ public final class ServerLifecycle {
         if (svc == null) return;
         extractAllLoaded(event.getServer());
         try {
-            svc.registry().flushDirty();
-            svc.villages().flushDirty();
-            svc.factions().flushDirty();
+            svc.flushAll();
         } catch (IOException e) {
             LOG.error("Final flushDirty failed: {}", e.toString(), e);
         }
@@ -65,6 +63,7 @@ public final class ServerLifecycle {
         TierManager.reset();
         ActiveStepRuntime.reset();
         ConsequenceEvents.reset();
+        BirthService.reset();
         AIService.stop();
         PersistenceService.stop();
     }
@@ -92,9 +91,7 @@ public final class ServerLifecycle {
         if (tickCounter % AUTOSAVE_INTERVAL_TICKS == 0) {
             decayMarkets(svc.villages());
             try {
-                svc.registry().flushDirty();
-                svc.villages().flushDirty();
-                svc.factions().flushDirty();
+                svc.flushAll();
             } catch (IOException e) {
                 LOG.error("Auto-save flush failed: {}", e.toString(), e);
             }

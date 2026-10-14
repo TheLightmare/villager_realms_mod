@@ -5,6 +5,7 @@ import com.lightmare.villagerrealms.data.RoleLoader;
 import com.lightmare.villagerrealms.entity.NPCEntityType;
 import com.lightmare.villagerrealms.entity.client.NPCClientRegistration;
 import com.lightmare.villagerrealms.server.ActiveStepRuntime;
+import com.lightmare.villagerrealms.server.BirthService;
 import com.lightmare.villagerrealms.server.ConsequenceEvents;
 import com.lightmare.villagerrealms.server.Reconciler;
 import com.lightmare.villagerrealms.server.ServerLifecycle;
@@ -33,6 +34,7 @@ public final class VillagerRealms {
         NeoForge.EVENT_BUS.register(TierManager.class);
         NeoForge.EVENT_BUS.register(RoleLoader.class);
         NeoForge.EVENT_BUS.register(ConsequenceEvents.class);
+        NeoForge.EVENT_BUS.register(BirthService.class);
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
             NPCClientRegistration.register(modBus);

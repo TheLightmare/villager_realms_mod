@@ -211,7 +211,15 @@ The four substrate gaps, in priority order:
 
 **Phase 3 — fun features.** Only after Phase 2:
 
-11. **Births + child role.** Original step 7. Naturally a Tier 2 mechanic; gated on bed availability; pregnancy timer; child role transition.
+11. ~~**Births + child role**~~ — **done.** Original step 7.
+   - **State lives in the persisted `ScheduleStore`** (`schedule.bin`, the "SimulationScheduler" file this doc lists): a queue of `ScheduledEvent`s (BIRTH, AGE_UP) keyed by id, pumped every 100 ticks by `BirthService`. No NPCRecord schema change.
+   - **Bed reservation on conception.** `VillageBed.reservedFor` (VillageStore v4→v5; the shared bed codec was split into `BED_LEGACY`/`BED` so the frozen v1–v4 codecs keep decoding) holds the unborn child's pre-generated uuid. A bed is free only with no occupant *and* no reservation; `RecordVillageView.freeBeds` reports that, so two couples can't race for one bed.
+   - **Shared readiness, both tiers.** `core/birth/Readiness` (adult 18–50, hunger ≥ 14, energy ≥ 0.5, free bed, village has food, not in cooldown) feeds `ConceiveAction` at Tier 0 (base weight 0.3 — wins only when nothing presses, e.g. rested at night) and the abstract sweep in `BirthService` for villages with no ACTIVE NPC (per-cycle roll, staggered by village hash). "Already expecting" is derived from the `CHILD_CONCEIVED` memory event: the cooldown (5 days) exceeds the pregnancy (3 days), so no flag is needed.
+   - **Two parents, gender-agnostic.** `Partners.choose` picks another eligible adult of the village with non-negative mutual personal opinion, warmest first, uuid tie-break. Gender is still never assigned at audit; newborns get a random one.
+   - **Delivery** (`Delivery.deliver`): claims the reserved bed (falls back to any free bed; drops the birth if none), builds the child (`child` role, age 0, 3 bread, up to 10 gold from each parent, family bonds +20 both ways, `BORN_TO`/`CHILD_BORN` memories), schedules AGE_UP at +10 days, and spawns the entity if the chunk is loaded. Either parent may be dead by then.
+   - **Age-up inherits the bed's role** (`AgeUp.apply`): the audit's bed→role map is the source of truth, so a child born into a dead farmer's bed grows up a farmer with the nearest farmer station; roles without a station work at the centre. Goes through `Consequences.roleChanged`.
+   - **Observable:** `/vr schedule`, `/vr conceive <uuid>` (forces one attempt and says why it failed), reserved/free bed counts in `/vr village list`.
+   Known limits: no pregnancy complications (the timer is the hook); children don't earn and live on starting food/gold until age-up — a 10-day childhood with 3 bread means a child will usually need to buy food, so a village that can't feed itself loses its children first.
 12. Player-facing surface (dialog, trade UI, combat-with-NPCs).
 
 Every "living-world" project that dies, dies because someone built the fun parts on top of a shaky simulation core. Foundation first, depth second, features third.

@@ -191,6 +191,7 @@ public final class ActiveStepRuntime {
             case "buy":      handleBuy(entity, rec, step, svc, ai, tick); return;
             case "withdraw": handleWithdraw(entity, rec, step, svc, ai, tick); return;
             case "sleep":    handleSleep(level, entity, rec, svc, tick); return;
+            case "conceive": handleConceive(level, entity, rec, svc, tick); return;
             default:
                 // idle / unknown: stand still.
                 if (!entity.getNavigation().isDone()) entity.getNavigation().stop();
@@ -364,6 +365,32 @@ public final class ActiveStepRuntime {
             svc.registry().put(next);
         }
         lastFiredAt.put(entity.getUUID(), tick);
+    }
+
+    /**
+     * At home: try to start a family. Gated on being at the assigned bed;
+     * {@link BirthService#tryConceive} re-checks readiness, so a stale plan
+     * is harmless. On success the memory event zeroes readiness and the next
+     * evaluation picks something else.
+     */
+    private static void handleConceive(ServerLevel level, NPCEntity entity, NPCRecord rec,
+                                       PersistenceService svc, long tick) {
+        BlockPos bed = bedFor(villageOf(rec, svc), rec.identity().uuid());
+        if (bed == null) {
+            if (!entity.getNavigation().isDone()) entity.getNavigation().stop();
+            return;
+        }
+        double distSq = entity.distanceToSqr(bed.getX() + 0.5, bed.getY(), bed.getZ() + 0.5);
+        if (distSq >= ARRIVE_RADIUS_SQ) {
+            if (entity.getNavigation().isDone()) {
+                entity.getNavigation().moveTo(bed.getX() + 0.5, bed.getY(), bed.getZ() + 0.5, MOVE_SPEED);
+            }
+            return;
+        }
+        if (!entity.getNavigation().isDone()) entity.getNavigation().stop();
+        if (!cadenceElapsed(entity.getUUID(), tick, WORK_CADENCE_TICKS)) return;
+        lastFiredAt.put(entity.getUUID(), tick);
+        BirthService.tryConceive(svc, rec, level.getGameTime());
     }
 
     /**
