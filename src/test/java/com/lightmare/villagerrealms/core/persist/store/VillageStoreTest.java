@@ -1,6 +1,7 @@
 package com.lightmare.villagerrealms.core.persist.store;
 
 import com.lightmare.villagerrealms.core.persist.shard.PersistenceWorker;
+import com.lightmare.villagerrealms.core.record.DeathRecord;
 import com.lightmare.villagerrealms.core.record.VillageBed;
 import com.lightmare.villagerrealms.core.record.VillageMarket;
 import com.lightmare.villagerrealms.core.record.VillageRecord;
@@ -46,7 +47,8 @@ class VillageStoreTest {
                         new VillageBed(5, 64, 5, "laborer", UUID.randomUUID())),
                 List.of(new VillageWorkstation(2, 64, 2, "farmer")),
                 VillageMarket.EMPTY,
-                "faction:" + id);
+                "faction:" + id,
+                List.of(new DeathRecord(UUID.randomUUID(), "Old-Tom", "farmer", 900L, "starvation", null)));
     }
 
     @Test

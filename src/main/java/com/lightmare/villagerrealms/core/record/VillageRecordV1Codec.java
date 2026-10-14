@@ -41,5 +41,6 @@ public final class VillageRecordV1Codec {
                     (List<VillageBed>) a[10],
                     (List<VillageWorkstation>) a[11],
                     VillageMarket.EMPTY,
-                    null));
+                    null,
+                    List.of()));
 }

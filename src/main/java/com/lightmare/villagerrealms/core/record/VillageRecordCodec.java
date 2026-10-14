@@ -41,6 +41,17 @@ public final class VillageRecordCodec {
                     (Map<String, Integer>) a[2],
                     (Long) a[3]));
 
+    public static final Codec<DeathRecord> DEATH = RecordCodec.<DeathRecord>builder()
+            .field(Codecs.UUID_, DeathRecord::uuid)
+            .field(Codecs.STRING, DeathRecord::name)
+            .field(Codecs.STRING, DeathRecord::roleId)
+            .field(Codecs.VARLONG, DeathRecord::tick)
+            .field(Codecs.STRING, DeathRecord::cause)
+            .field(Codecs.nullable(Codecs.STRING), DeathRecord::killerRef)
+            .build(a -> new DeathRecord(
+                    (UUID) a[0], (String) a[1], (String) a[2],
+                    (Long) a[3], (String) a[4], (String) a[5]));
+
     public static final Codec<VillageRecord> VILLAGE = RecordCodec.<VillageRecord>builder()
             .field(Codecs.VARINT, VillageRecord::dataVersion)
             .field(Codecs.STRING, VillageRecord::villageId)
@@ -56,6 +67,7 @@ public final class VillageRecordCodec {
             .field(Codecs.list(WORKSTATION), VillageRecord::workstations)
             .field(MARKET, VillageRecord::market)
             .field(Codecs.nullable(Codecs.STRING), VillageRecord::factionOwnerId)
+            .field(Codecs.list(DEATH), VillageRecord::deaths)
             .build(a -> new VillageRecord(
                     (Integer) a[0], (String) a[1], (String) a[2],
                     (Integer) a[3], (Integer) a[4], (Integer) a[5],
@@ -64,5 +76,6 @@ public final class VillageRecordCodec {
                     (List<VillageBed>) a[10],
                     (List<VillageWorkstation>) a[11],
                     (VillageMarket) a[12],
-                    (String) a[13]));
+                    (String) a[13],
+                    (List<DeathRecord>) a[14]));
 }

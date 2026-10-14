@@ -11,7 +11,7 @@ class VillageRecordGeometryTest {
 
     private static VillageRecord village(List<VillageBed> beds) {
         return new VillageRecord(VillageRecord.CURRENT_VERSION, "v", "minecraft:overworld",
-                0, 60, 0, 40, 90, 20, true, beds, List.of(), VillageMarket.EMPTY, null);
+                0, 60, 0, 40, 90, 20, true, beds, List.of(), VillageMarket.EMPTY, null, List.of());
     }
 
     private static VillageBed bed(int y) {

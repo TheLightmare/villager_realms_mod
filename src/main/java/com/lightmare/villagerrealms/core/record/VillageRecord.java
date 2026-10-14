@@ -1,6 +1,8 @@
 package com.lightmare.villagerrealms.core.record;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public record VillageRecord(
         int dataVersion,
@@ -12,10 +14,18 @@ public record VillageRecord(
         List<VillageBed> beds,
         List<VillageWorkstation> workstations,
         VillageMarket market,
-        String factionOwnerId
+        String factionOwnerId,
+        List<DeathRecord> deaths
 ) implements Versioned {
 
-    public static final int CURRENT_VERSION = 3;
+    public static final int CURRENT_VERSION = 4;
+
+    /**
+     * Ring cap on the death ledger. Old deaths roll off; the ledger exists
+     * for memory/observability and to stop a re-audit repopulating a dead
+     * NPC's bed, and both only need recent history.
+     */
+    public static final int MAX_DEATHS = 256;
 
     public VillageRecord {
         if (villageId == null) throw new IllegalArgumentException("villageId required");
@@ -23,8 +33,11 @@ public record VillageRecord(
         if (beds == null) throw new IllegalArgumentException("beds required");
         if (workstations == null) throw new IllegalArgumentException("workstations required");
         if (market == null) market = VillageMarket.EMPTY;
+        if (deaths == null) deaths = List.of();
+        if (deaths.size() > MAX_DEATHS) deaths = deaths.subList(deaths.size() - MAX_DEATHS, deaths.size());
         beds = List.copyOf(beds);
         workstations = List.copyOf(workstations);
+        deaths = List.copyOf(deaths);
     }
 
     /** Block X of the bounding-box centre. */
@@ -52,17 +65,42 @@ public record VillageRecord(
         return ys[ys.length / 2];
     }
 
+    /** True if this village has buried the NPC with that uuid. */
+    public boolean isDead(UUID uuid) {
+        if (uuid == null) return false;
+        for (DeathRecord d : deaths) if (uuid.equals(d.uuid())) return true;
+        return false;
+    }
+
+    /**
+     * Bury an NPC: free the bed they occupied and append to the ledger. The
+     * registry removal is the caller's job (different store).
+     */
+    public VillageRecord recordDeath(DeathRecord death) {
+        List<VillageBed> nextBeds = new ArrayList<>(beds.size());
+        for (VillageBed b : beds) {
+            nextBeds.add(death.uuid().equals(b.occupant()) ? b.withOccupant(null) : b);
+        }
+        List<DeathRecord> nextDeaths = new ArrayList<>(deaths.size() + 1);
+        nextDeaths.addAll(deaths);
+        nextDeaths.add(death);
+        return new VillageRecord(
+                dataVersion, villageId, dimension,
+                minX, minY, minZ, maxX, maxY, maxZ,
+                audited, nextBeds, workstations, market, factionOwnerId, nextDeaths);
+    }
+
     public VillageRecord withMarket(VillageMarket newMarket) {
         return new VillageRecord(
                 dataVersion, villageId, dimension,
                 minX, minY, minZ, maxX, maxY, maxZ,
-                audited, beds, workstations, newMarket, factionOwnerId);
+                audited, beds, workstations, newMarket, factionOwnerId, deaths);
     }
 
     public VillageRecord withFactionOwner(String newFactionOwnerId) {
         return new VillageRecord(
                 dataVersion, villageId, dimension,
                 minX, minY, minZ, maxX, maxY, maxZ,
-                audited, beds, workstations, market, newFactionOwnerId);
+                audited, beds, workstations, market, newFactionOwnerId, deaths);
     }
 }

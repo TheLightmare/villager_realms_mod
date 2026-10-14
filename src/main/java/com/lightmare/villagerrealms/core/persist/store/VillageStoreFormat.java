@@ -11,6 +11,7 @@ import com.lightmare.villagerrealms.core.record.VillageRecord;
 import com.lightmare.villagerrealms.core.record.VillageRecordCodec;
 import com.lightmare.villagerrealms.core.record.VillageRecordV1Codec;
 import com.lightmare.villagerrealms.core.record.VillageRecordV2Codec;
+import com.lightmare.villagerrealms.core.record.VillageRecordV3Codec;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -18,12 +19,13 @@ import java.util.List;
 
 public final class VillageStoreFormat {
 
-    public static final int CURRENT_VERSION = 3;
+    public static final int CURRENT_VERSION = 4;
 
     public static final MigrationChain CHAIN =
             new MigrationChain("VillageStore", CURRENT_VERSION)
                     .register(new V1ToV2())
-                    .register(new V2ToV3());
+                    .register(new V2ToV3())
+                    .register(new V3ToV4());
 
     public static final VersionedFormat<List<VillageRecord>> FORMAT =
             new VersionedFormat<>(BlobFormat.MAGIC_VILLAGE_STORE,
@@ -58,7 +60,8 @@ public final class VillageStoreFormat {
                         r.audited(),
                         r.beds(), r.workstations(),
                         VillageMarket.EMPTY,
-                        null));
+                        null,
+                        List.of()));
             }
             return V2_LIST.toBytes(upgraded);
         }
@@ -67,20 +70,53 @@ public final class VillageStoreFormat {
     /**
      * v2 -&gt; v3: VillageRecord gained {@code factionOwnerId}. v2 codec
      * already returns records with {@code factionOwnerId = null}; we just
-     * bump dataVersion and re-encode with the current codec.
+     * bump dataVersion and re-encode with the v3-shape codec.
      */
     private static final class V2ToV3 implements Migration {
 
         private static final Codec<List<VillageRecord>> V2_LIST =
                 Codecs.list(VillageRecordV2Codec.VILLAGE_V2);
         private static final Codec<List<VillageRecord>> V3_LIST =
-                Codecs.list(VillageRecordCodec.VILLAGE);
+                Codecs.list(VillageRecordV3Codec.VILLAGE_V3);
 
         @Override public int fromVersion() { return 2; }
 
         @Override
         public byte[] migrate(byte[] payload) throws IOException {
             List<VillageRecord> oldRecords = V2_LIST.fromBytes(payload);
+            List<VillageRecord> upgraded = new ArrayList<>(oldRecords.size());
+            for (VillageRecord r : oldRecords) {
+                upgraded.add(new VillageRecord(
+                        3,
+                        r.villageId(), r.dimension(),
+                        r.minX(), r.minY(), r.minZ(),
+                        r.maxX(), r.maxY(), r.maxZ(),
+                        r.audited(),
+                        r.beds(), r.workstations(),
+                        r.market(),
+                        null,
+                        List.of()));
+            }
+            return V3_LIST.toBytes(upgraded);
+        }
+    }
+
+    /**
+     * v3 -&gt; v4: VillageRecord gained the death ledger. v3 codec returns an
+     * empty ledger; bump dataVersion and re-encode with the current codec.
+     */
+    private static final class V3ToV4 implements Migration {
+
+        private static final Codec<List<VillageRecord>> V3_LIST =
+                Codecs.list(VillageRecordV3Codec.VILLAGE_V3);
+        private static final Codec<List<VillageRecord>> V4_LIST =
+                Codecs.list(VillageRecordCodec.VILLAGE);
+
+        @Override public int fromVersion() { return 3; }
+
+        @Override
+        public byte[] migrate(byte[] payload) throws IOException {
+            List<VillageRecord> oldRecords = V3_LIST.fromBytes(payload);
             List<VillageRecord> upgraded = new ArrayList<>(oldRecords.size());
             for (VillageRecord r : oldRecords) {
                 upgraded.add(new VillageRecord(
@@ -91,9 +127,10 @@ public final class VillageStoreFormat {
                         r.audited(),
                         r.beds(), r.workstations(),
                         r.market(),
-                        null));
+                        r.factionOwnerId(),
+                        List.of()));
             }
-            return V3_LIST.toBytes(upgraded);
+            return V4_LIST.toBytes(upgraded);
         }
     }
 }

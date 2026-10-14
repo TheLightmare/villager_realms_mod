@@ -10,4 +10,10 @@ public record VillageBed(
     public VillageBed {
         if (role == null) throw new IllegalArgumentException("role required");
     }
+
+    public VillageBed withOccupant(UUID newOccupant) {
+        return new VillageBed(x, y, z, role, newOccupant);
+    }
+
+    public boolean isFree() { return occupant == null; }
 }
