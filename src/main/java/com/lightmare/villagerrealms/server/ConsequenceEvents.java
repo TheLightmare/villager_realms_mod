@@ -8,6 +8,7 @@ import com.lightmare.villagerrealms.core.economy.MarketOps;
 import com.lightmare.villagerrealms.core.persist.store.FactionStore;
 import com.lightmare.villagerrealms.core.persist.store.NPCRegistry;
 import com.lightmare.villagerrealms.core.persist.store.VillageStore;
+import com.lightmare.villagerrealms.core.record.ActionState;
 import com.lightmare.villagerrealms.core.record.DeathRecord;
 import com.lightmare.villagerrealms.core.record.Faction;
 import com.lightmare.villagerrealms.core.record.ItemEntry;
@@ -15,8 +16,10 @@ import com.lightmare.villagerrealms.core.record.NPCRecord;
 import com.lightmare.villagerrealms.core.record.VillageRecord;
 import com.lightmare.villagerrealms.entity.NPCEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -83,7 +86,12 @@ public final class ConsequenceEvents {
         if (attackerRef == null) return; // environment: nothing to hold a grudge against
         long tick = npc.level().getGameTime();
 
-        svc.registry().put(Consequences.attacked(rec, attackerRef, event.getNewDamage(), tick));
+        // Being hit is an event worth re-evaluating on (IAUS notes): drop
+        // whatever the NPC was doing — including a locked pathfind — so the
+        // next scheduler pass is free to pick flee.
+        NPCRecord hit = Consequences.attacked(rec, attackerRef, event.getNewDamage(), tick);
+        svc.registry().put(withAction(hit, ActionState.IDLE));
+        ActiveStepRuntime.forget(npc.getUUID());
 
         String key = npc.getUUID() + "|" + attackerRef;
         Long last = lastStandingHit.get(key);
@@ -195,30 +203,56 @@ public final class ConsequenceEvents {
         LOG.warn("[vr] faction {} ({}) has been wiped out", factionId, faction.name());
     }
 
-    // -------- gifts -----------------------------------------------------
+    // -------- player interaction ----------------------------------------
 
+    /**
+     * Right-click dispatch (main hand only, server side):
+     *   - empty hand → the NPC's trade menu (chat);
+     *   - sneaking with an item → sell one unit to the market through the NPC;
+     *   - otherwise with an item → gift one unit.
+     * Gifts are always accepted — they're how standing is repaired — but
+     * trade is refused by hostile NPCs (see {@link TradeService}).
+     */
     @SubscribeEvent
     public static void onInteract(PlayerInteractEvent.EntityInteract event) {
         if (event.getHand() != InteractionHand.MAIN_HAND) return;
         if (!(event.getTarget() instanceof NPCEntity npc)) return;
         if (!(npc.level() instanceof ServerLevel level)) return;
-        ItemStack held = event.getItemStack();
-        if (held.isEmpty()) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
         PersistenceService svc = PersistenceService.getOrNull();
         if (svc == null) return;
         NPCRecord rec = svc.registry().get(npc.getUUID()).orElse(null);
         if (rec == null) return;
 
-        Player player = event.getEntity();
+        ItemStack held = event.getItemStack();
+        if (held.isEmpty()) {
+            TradeService.showMenu(svc, player, npc, rec);
+        } else if (player.isShiftKeyDown()) {
+            TradeService.sellHeld(svc, player, npc, rec, held);
+        } else {
+            gift(svc, level, player, rec, held);
+        }
+        event.setCanceled(true);
+        event.setCancellationResult(InteractionResult.SUCCESS);
+    }
+
+    private static void gift(PersistenceService svc, ServerLevel level, Player player, NPCRecord rec, ItemStack held) {
         String itemId = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
         long tick = level.getGameTime();
-
         svc.registry().put(Consequences.giftReceived(rec, Refs.player(player.getUUID()), itemId, 1, tick));
         adjustStanding(svc.factions(), rec.factionId(), Refs.player(player.getUUID()), Standing.GIFT_DELTA);
         if (!player.getAbilities().instabuild) held.shrink(1);
+        player.sendSystemMessage(Component.literal(rec.identity().name() + " accepts your " + held.getHoverName().getString() + "."));
+    }
 
-        event.setCanceled(true);
-        event.setCancellationResult(InteractionResult.SUCCESS);
+    static void adjustStandingFor(FactionStore factions, String factionId, String target, int delta) {
+        adjustStanding(factions, factionId, target, delta);
+    }
+
+    private static NPCRecord withAction(NPCRecord r, ActionState a) {
+        return new NPCRecord(
+                r.dataVersion(), r.identity(), r.location(), r.vitals(), r.inventory(),
+                r.economy(), r.role(), r.factionId(), r.relationships(), r.memory(), a);
     }
 
     // -------- helpers ---------------------------------------------------

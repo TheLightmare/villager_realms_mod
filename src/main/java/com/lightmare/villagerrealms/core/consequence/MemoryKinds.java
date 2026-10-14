@@ -17,6 +17,8 @@ public final class MemoryKinds {
     public static final String CHILD_BORN = "CHILD_BORN";
     /** This NPC was born. subject = parent ref (one event per parent). */
     public static final String BORN_TO = "BORN_TO";
+    /** This NPC brokered a trade with the market. subject = trader ref; detail = what and for how much. */
+    public static final String TRADED = "TRADED";
 
     private MemoryKinds() {}
 }

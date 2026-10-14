@@ -1,5 +1,6 @@
 package com.lightmare.villagerrealms;
 
+import com.lightmare.villagerrealms.command.TradeCommand;
 import com.lightmare.villagerrealms.command.VRCommand;
 import com.lightmare.villagerrealms.data.RoleLoader;
 import com.lightmare.villagerrealms.entity.NPCEntityType;
@@ -30,6 +31,7 @@ public final class VillagerRealms {
         NeoForge.EVENT_BUS.register(ServerLifecycle.class);
         NeoForge.EVENT_BUS.register(Reconciler.class);
         NeoForge.EVENT_BUS.register(VRCommand.class);
+        NeoForge.EVENT_BUS.register(TradeCommand.class);
         NeoForge.EVENT_BUS.register(ActiveStepRuntime.class);
         NeoForge.EVENT_BUS.register(TierManager.class);
         NeoForge.EVENT_BUS.register(RoleLoader.class);
